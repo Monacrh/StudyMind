@@ -11,7 +11,6 @@ import ResultSection from './components/ResultSection';
 export default function StudyMindApp() {
   const [inputText, setInputText] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
   const [result, setResult] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -104,8 +103,6 @@ export default function StudyMindApp() {
             setInputText={setInputText}
             selectedFiles={selectedFiles}
             setSelectedFiles={setSelectedFiles}
-            isRecording={isRecording}
-            setIsRecording={setIsRecording}
           />
           
           <ActionSection 

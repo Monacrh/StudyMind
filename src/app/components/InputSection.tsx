@@ -1,23 +1,19 @@
 // components/InputSection.tsx
 import React, { useRef } from 'react';
-import { Upload, Mic, MicOff, FileText, Image } from 'lucide-react';
+import { Upload, FileText, Image } from 'lucide-react';
 
 interface InputSectionProps {
   inputText: string;
   setInputText: (text: string) => void;
   selectedFiles: File[];
   setSelectedFiles: React.Dispatch<React.SetStateAction<File[]>>;
-  isRecording: boolean;
-  setIsRecording: (recording: boolean) => void;
 }
 
 export default function InputSection({ 
   inputText, 
   setInputText, 
   selectedFiles, 
-  setSelectedFiles, 
-  isRecording, 
-  setIsRecording 
+  setSelectedFiles
 }: InputSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -28,10 +24,6 @@ export default function InputSection({
 
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
   };
 
   return (
@@ -68,18 +60,6 @@ export default function InputSection({
             onChange={handleFileUpload}
             className="hidden"
           />
-
-          <button
-            onClick={toggleRecording}
-            className={`flex items-center gap-2 px-4 py-2 font-bold border-2 border-[#675D50] transition-all ${
-              isRecording 
-                ? 'bg-red-400 shadow-[4px_4px_0px_0px_#675D50] animate-pulse text-[#675D50]' 
-                : 'bg-[#675D50] text-[#F3DEBA] shadow-[4px_4px_0px_0px_#ABC4AA] hover:shadow-[2px_2px_0px_0px_#ABC4AA] hover:translate-x-0.5 hover:translate-y-0.5'
-            }`}
-          >
-            {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            {isRecording ? 'STOP RECORDING' : 'START RECORDING'}
-          </button>
         </div>
 
         {selectedFiles.length > 0 && (
