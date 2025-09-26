@@ -24,7 +24,7 @@ export default function Header() {
           </h1>
         </div>
         
-        <div className="flex items-center gap-3">
+        {/* <div className="flex items-center gap-3">
           <div className="px-3 py-1 bg-[#ABC4AA] text-[#675D50] font-bold text-sm border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#F3DEBA] hover:-translate-y-0.5 transition-transform">
             PRIVACY-FIRST
           </div>
@@ -32,7 +32,7 @@ export default function Header() {
           <div className="px-3 py-1 bg-[#F3DEBA] text-[#675D50] font-bold text-sm border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#ABC4AA] hover:-translate-y-0.5 transition-transform">
             OFFLINE READY
           </div>
-        </div>
+        </div> */}
       </div>
     </header>
   );
