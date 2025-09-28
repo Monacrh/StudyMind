@@ -115,7 +115,14 @@ export default function AIStatus({ isVisible, onClose }: AIStatusProps) {
           {/* Info */}
           <div className="bg-[#F3DEBA] border-2 border-dashed border-[#675D50] p-3">
             <p className="text-[#675D50] text-xs">
-              <strong>Note:</strong> When AI is unavailable, StudyMind will use fallback mock responses. For real AI summarization, ensure your Chrome browser meets the requirements above.
+              <strong>Note:</strong> When AI is unavailable, StudyMind will use fallback mock responses. For real AI features, ensure your Chrome browser meets the requirements above.
+            </p>
+            <p className="text-[#675D50] text-xs mt-2">
+              <strong>Enable AI Features:</strong> Go to chrome://flags and enable these flags:<br/>
+              • #summarization-api-for-gemini-nano → Enabled Multilingual<br/>
+              • #translation-api-for-gemini-nano → Enabled Multilingual<br/>
+              • #optimization-guide-on-device-model → Enabled<br/>
+              Then restart Chrome.
             </p>
           </div>
 

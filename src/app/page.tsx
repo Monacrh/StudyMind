@@ -8,6 +8,8 @@ import ActionSection from './components/ActionSection';
 import ProcessButton from './components/ProcessButton';
 import ResultSection from './components/ResultSection';
 import SummarizerService, { SummarizerOptions } from './services/summarizerService';
+import TranslatorService, { TranslatorOptions } from './services/TranslatorService';
+import { AIConfigOptions } from './components/AIConfiguration';
 
 export default function StudyMindApp() {
   const [inputText, setInputText] = useState('');
@@ -16,53 +18,63 @@ export default function StudyMindApp() {
   const [result, setResult] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [summarizerSupported, setSummarizerSupported] = useState(false);
+  const [translatorSupported, setTranslatorSupported] = useState(false);
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
+  
+  // AI Configuration state
+  const [aiConfig, setAiConfig] = useState<AIConfigOptions>({
+    summaryType: 'key-points',
+    summaryLength: 'medium',
+    summaryFormat: 'markdown',
+    translateTo: 'id',
+    translateFrom: 'auto'
+  });
 
   const summarizerService = SummarizerService.getInstance();
+  const translatorService = TranslatorService.getInstance();
 
   useEffect(() => {
-    // Check if Summarizer API is supported
+    // Check if AI APIs are supported
     const checkSupport = async () => {
-      const supported = summarizerService.isSupported();
-      setSummarizerSupported(supported);
+      const summarizerSupport = summarizerService.isSupported();
+      const translatorSupport = translatorService.isSupported();
       
-      if (supported) {
+      setSummarizerSupported(summarizerSupport);
+      setTranslatorSupported(translatorSupport);
+      
+      if (summarizerSupport) {
         const availability = await summarizerService.checkAvailability();
         console.log('Summarizer availability:', availability);
+      }
+      
+      if (translatorSupport) {
+        console.log('Translator API supported');
+        // Test if we can check availability for a common language pair
+        try {
+          const translatorAvailability = await translatorService.checkTranslationAvailability('en', 'id');
+          console.log('Translator availability (en->id):', translatorAvailability);
+        } catch (error) {
+          console.warn('Could not check translator availability:', error);
+        }
       }
     };
 
     checkSupport();
-  }, [summarizerService]);
+  }, []);
 
-  const processSummarization = async (text: string, action: string): Promise<string> => {
+  const processSummarization = async (text: string): Promise<string> => {
     try {
       setIsDownloading(true);
       setModelDownloadProgress(0);
       
-      // Map actions to summarizer options
-      let summarizerOptions: SummarizerOptions;
-      
-      switch (action) {
-        case 'summarize':
-          summarizerOptions = {
-            type: 'key-points',
-            format: 'markdown',
-            length: 'medium',
-            sharedContext: 'This is educational content for study purposes'
-          };
-          break;
-        default:
-          summarizerOptions = {
-            type: 'tldr',
-            format: 'markdown',
-            length: 'short',
-            sharedContext: 'This content needs to be processed'
-          };
-      }
+      const summarizerOptions: SummarizerOptions = {
+        type: aiConfig.summaryType,
+        format: aiConfig.summaryFormat,
+        length: aiConfig.summaryLength,
+        sharedContext: 'This is educational content for study purposes'
+      };
 
-      // Create summarizer if not exists
       await summarizerService.createSummarizer(summarizerOptions, (progress) => {
         setModelDownloadProgress(progress);
         if (progress >= 100) {
@@ -70,21 +82,87 @@ export default function StudyMindApp() {
         }
       });
 
-      // Process text
       const summaryResult = await summarizerService.summarize(text, 'Educational content analysis');
       
       if (summaryResult.success && summaryResult.result) {
-        const actionEmoji = action === 'summarize' ? '📝' : '🤖';
-        return `${actionEmoji} AI-POWERED RESULT:\n\n${summaryResult.result}\n\n✨ Generated using Chrome's Built-in AI (Gemini Nano)`;
+        return `📝 AI-POWERED SUMMARY:\n\n${summaryResult.result}\n\n✨ Generated using Chrome's Built-in AI (Gemini Nano)`;
       } else {
-        throw new Error(summaryResult.error || 'Failed to generate AI result');
+        throw new Error(summaryResult.error || 'Failed to generate AI summary');
       }
     } catch (error) {
-      console.error('AI processing error:', error);
+      console.error('AI summarization error:', error);
       setIsDownloading(false);
       
-      // Return error with fallback suggestion
-      return `❌ AI PROCESSING FAILED:\n\n${error instanceof Error ? error.message : 'Unknown error occurred'}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI(action)}`;
+      return `❌ AI SUMMARIZATION FAILED:\n\n${error instanceof Error ? error.message : 'Unknown error occurred'}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('summarize')}`;
+    }
+  };
+
+  const processTranslation = async (text: string): Promise<string> => {
+    try {
+      setIsDownloading(true);
+      setModelDownloadProgress(0);
+      
+      // Check if text is too short or empty
+      if (!text || text.trim().length < 3) {
+        throw new Error('Text too short for translation (minimum 3 characters)');
+      }
+
+      // Check if translation is needed (same language)
+      if (aiConfig.translateFrom !== 'auto' && aiConfig.translateFrom === aiConfig.translateTo) {
+        return `🌐 TRANSLATION RESULT:\n\nNo translation needed - source and target languages are the same.\n\nOriginal text: ${text}`;
+      }
+      
+      const translatorOptions: TranslatorOptions = {
+        sourceLanguage: aiConfig.translateFrom,
+        targetLanguage: aiConfig.translateTo
+      };
+
+      // Add delay between API calls to prevent conflicts
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('Starting translation with options:', translatorOptions);
+
+      const translationResult = await translatorService.translate(text, translatorOptions, (progress) => {
+        setModelDownloadProgress(progress);
+        if (progress >= 100) {
+          setIsDownloading(false);
+        }
+      });
+      
+      console.log('Translation result:', translationResult);
+      
+      if (translationResult.success && translationResult.result) {
+        const fromLang = translationResult.detectedLanguage || aiConfig.translateFrom;
+        const toLang = aiConfig.translateTo;
+        
+        // Check if translation actually happened (sometimes API returns same text)
+        if (translationResult.result === text && fromLang !== toLang) {
+          return `🌐 TRANSLATION RESULT:\n\nFrom: ${fromLang.toUpperCase()}\nTo: ${toLang.toUpperCase()}\n\n${translationResult.result}\n\n⚠️ Note: Translation model may not support this language pair yet. Showing original text.`;
+        }
+        
+        return `🌐 AI-POWERED TRANSLATION:\n\nFrom: ${fromLang.toUpperCase()}\nTo: ${toLang.toUpperCase()}\n\n${translationResult.result}\n\n✨ Generated using Chrome's Built-in AI Translation`;
+      } else {
+        const errorMsg = translationResult.error || 'Unknown translation error';
+        console.error('Translation failed:', errorMsg);
+        throw new Error(`Translation failed: ${errorMsg}`);
+      }
+    } catch (error) {
+      console.error('AI translation error:', error);
+      setIsDownloading(false);
+      
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('not available')) {
+        errorMessage = `Translation from ${aiConfig.translateFrom} to ${aiConfig.translateTo} is not supported yet`;
+      } else if (errorMessage.includes('User activation')) {
+        errorMessage = 'User interaction required for translation API';
+      }
+      
+      return `❌ AI TRANSLATION FAILED:\n\n${errorMessage}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('translate')}`;
     }
   };
 
@@ -95,7 +173,8 @@ export default function StudyMindApp() {
       case 'questions':
         return '❓ QUESTIONS GENERATED:\n\n1. What are the key concepts mentioned in this content?\n\n2. How does this information relate to the main topic?\n\n3. What examples or evidence support the main points?\n\n4. What practical applications can be derived from this?\n\n5. What conclusions can be drawn from the presented information?\n\n6. How might this knowledge be applied in real-world scenarios?';
       case 'translate':
-        return '🌐 TRANSLATION RESULT:\n\n[Indonesian] Ini adalah hasil terjemahan dari konten yang Anda berikan. Teks telah diterjemahkan dengan mempertahankan makna dan konteks asli.\n\nTerjemahan ini mempertimbangkan:\n• Konteks budaya dan bahasa\n• Makna literal dan konotatif\n• Struktur kalimat yang natural\n• Terminologi yang tepat';
+        const targetLang = aiConfig.translateTo === 'id' ? 'Indonesian' : 'English';
+        return `🌐 TRANSLATION RESULT (MOCK):\n\n[${targetLang}] ${aiConfig.translateTo === 'id' ? 'Ini adalah hasil terjemahan dari konten yang Anda berikan. Teks telah diterjemahkan dengan mempertahankan makna dan konteks asli.' : 'This is the translation result of the content you provided. The text has been translated while maintaining the original meaning and context.'}\n\nTranslation considers:\n• Cultural and linguistic context\n• Literal and connotative meaning\n• Natural sentence structure\n• Appropriate terminology`;
       case 'proofread':
         return '✏️ PROOFREAD COMPLETE:\n\n✅ Grammar: No errors found\n✅ Spelling: All correct\n✅ Punctuation: Properly used\n✅ Sentence Structure: Well-formed\n\n📝 SUGGESTIONS:\n• Consider varying sentence structure for better flow\n• Some paragraphs could be shortened for clarity\n• Add transition words to improve coherence\n\nOverall Score: 95/100 - Excellent writing quality!';
       case 'improve':
@@ -126,19 +205,32 @@ export default function StudyMindApp() {
           const action = selectedActions[i];
           finalResult += `${i + 1}. `;
           
-          // Use AI for summarize action if supported and text is available
-          if (action === 'summarize' && summarizerSupported && inputText.trim()) {
-            try {
-              const aiResult = await processSummarization(inputText, action);
-              finalResult += `SUMMARY (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
-            } catch (error) {
-              finalResult += `SUMMARY (FALLBACK): ${processWithMockAI(action).split('\n\n').slice(1).join('\n\n')}\n\n`;
+          try {
+            // Add delay between operations to prevent API conflicts
+            if (i > 0) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
             }
-          } else {
-            // Use mock for other actions
+            
+            // Use AI for summarize action if supported and text is available
+            if (action === 'summarize' && summarizerSupported && inputText.trim()) {
+              const aiResult = await processSummarization(inputText);
+              finalResult += `SUMMARY (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            }
+            // Use AI for translate action if supported and text is available
+            else if (action === 'translate' && translatorSupported && inputText.trim()) {
+              const aiResult = await processTranslation(inputText);
+              finalResult += `TRANSLATION (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            } else {
+              // Use mock for other actions
+              const actionLabel = action.toUpperCase();
+              const mockResult = processWithMockAI(action);
+              finalResult += `${actionLabel}: ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            }
+          } catch (error) {
+            console.error(`Error processing action ${action}:`, error);
             const actionLabel = action.toUpperCase();
             const mockResult = processWithMockAI(action);
-            finalResult += `${actionLabel}: ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            finalResult += `${actionLabel} (FALLBACK): ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
           }
         }
         finalResult += `✨ All ${selectedActions.length} operations completed successfully!`;
@@ -148,14 +240,20 @@ export default function StudyMindApp() {
         
         // Use AI for summarize action if supported and text is available
         if (action === 'summarize' && summarizerSupported && inputText.trim()) {
-          finalResult = await processSummarization(inputText, action);
+          finalResult = await processSummarization(inputText);
+        }
+        // Use AI for translate action if supported and text is available
+        else if (action === 'translate' && translatorSupported && inputText.trim()) {
+          finalResult = await processTranslation(inputText);
         } else {
           // Use mock for other actions or when AI is not available
           finalResult = processWithMockAI(action);
           
           // Add note if AI is available but not used
-          if (summarizerSupported && action === 'summarize' && !inputText.trim()) {
+          if (action === 'summarize' && summarizerSupported && !inputText.trim()) {
             finalResult += '\n\n💡 NOTE: AI summarization requires text input. Please enter some text to use Chrome\'s built-in AI.';
+          } else if (action === 'translate' && translatorSupported && !inputText.trim()) {
+            finalResult += '\n\n💡 NOTE: AI translation requires text input. Please enter some text to use Chrome\'s built-in AI.';
           }
         }
       }
@@ -182,14 +280,18 @@ export default function StudyMindApp() {
         backgroundPosition: '0 0, 25px 25px'
       }}
     >
-      <Header />
+      <Header 
+        aiConfig={aiConfig}
+        onConfigChange={setAiConfig}
+      />
       
-      {/* AI Status Indicator */}
-      {summarizerSupported && (
+      {/* AI Status Indicators */}
+      {(summarizerSupported || translatorSupported) && (
         <div className="container mx-auto px-6 pt-4">
           <div className="bg-green-200 border-2 border-[#675D50] p-2 shadow-[2px_2px_0px_0px_#675D50]">
             <p className="text-[#675D50] text-sm font-bold text-center">
-              🤖 CHROME AI ENABLED - Real AI summarization available for text input!
+              🤖 CHROME AI ENABLED - 
+              {summarizerSupported && ' Real AI summarization'}{summarizerSupported && translatorSupported && ' +'}{translatorSupported && ' Real AI translation'} available for text input!
             </p>
           </div>
         </div>
@@ -248,7 +350,7 @@ export default function StudyMindApp() {
         style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}
       >
         STUDYMIND AI - YOUR VINTAGE STUDY COMPANION
-        {summarizerSupported && (
+        {(summarizerSupported || translatorSupported) && (
           <div className="text-xs mt-1 opacity-75">
             🤖 Powered by Chrome&apos;s Built-in AI (Gemini Nano)
           </div>

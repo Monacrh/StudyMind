@@ -1,9 +1,16 @@
 // components/Header.tsx
 import React, { useState } from 'react';
 import AIStatus from './AIStatus';
+import AIConfig, { AIConfigOptions } from './AIConfiguration';
 
-export default function Header() {
+interface HeaderProps {
+  aiConfig: AIConfigOptions;
+  onConfigChange: (config: AIConfigOptions) => void;
+}
+
+export default function Header({ aiConfig, onConfigChange }: HeaderProps) {
   const [showAIStatus, setShowAIStatus] = useState(false);
+  const [showAIConfig, setShowAIConfig] = useState(false);
 
   return (
     <>
@@ -30,6 +37,13 @@ export default function Header() {
           
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setShowAIConfig(true)}
+              className="px-3 py-1 bg-orange-400 text-[#675D50] font-bold text-sm border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#F3DEBA] hover:-translate-y-0.5 transition-transform"
+            >
+              ⚙️ AI CONFIG
+            </button>
+            
+            <button
               onClick={() => setShowAIStatus(true)}
               className="px-3 py-1 bg-blue-400 text-[#675D50] font-bold text-sm border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#F3DEBA] hover:-translate-y-0.5 transition-transform"
             >
@@ -50,6 +64,13 @@ export default function Header() {
       <AIStatus 
         isVisible={showAIStatus}
         onClose={() => setShowAIStatus(false)}
+      />
+
+      <AIConfig
+        isVisible={showAIConfig}
+        onClose={() => setShowAIConfig(false)}
+        config={aiConfig}
+        onConfigChange={onConfigChange}
       />
     </>
   );
