@@ -121,8 +121,12 @@ export default function AIStatus({ isVisible, onClose }: AIStatusProps) {
               <strong>Enable AI Features:</strong> Go to chrome://flags and enable these flags:<br/>
               • #summarization-api-for-gemini-nano → Enabled Multilingual<br/>
               • #translation-api-for-gemini-nano → Enabled Multilingual<br/>
+              • #proofreader-api-for-gemini-nano → Enabled Multilingual<br/>
               • #optimization-guide-on-device-model → Enabled<br/>
               Then restart Chrome.
+            </p>
+            <p className="text-[#675D50] text-xs mt-2 font-bold bg-yellow-100 p-2 border border-[#675D50]">
+              ⚠️ NOTE: Proofreader API is in Origin Trial (Chrome 141-145) and may require additional setup or token.
             </p>
           </div>
 

@@ -9,6 +9,7 @@ import ProcessButton from './components/ProcessButton';
 import ResultSection from './components/ResultSection';
 import SummarizerService, { SummarizerOptions } from './services/summarizerService';
 import TranslatorService, { TranslatorOptions } from './services/TranslatorService';
+import ProofreaderService, { ProofreaderOptions } from './services/proofreaderService';
 import { AIConfigOptions } from './components/AIConfiguration';
 
 export default function StudyMindApp() {
@@ -19,6 +20,7 @@ export default function StudyMindApp() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [summarizerSupported, setSummarizerSupported] = useState(false);
   const [translatorSupported, setTranslatorSupported] = useState(false);
+  const [proofreaderSupported, setProofreaderSupported] = useState(false);
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   
@@ -28,20 +30,26 @@ export default function StudyMindApp() {
     summaryLength: 'medium',
     summaryFormat: 'markdown',
     translateTo: 'id',
-    translateFrom: 'auto'
+    translateFrom: 'auto',
+    proofreadLanguage: 'en',
+    includeCorrectionTypes: true,
+    includeCorrectionExplanation: true
   });
 
   const summarizerService = SummarizerService.getInstance();
   const translatorService = TranslatorService.getInstance();
+  const proofreaderService = ProofreaderService.getInstance();
 
   useEffect(() => {
     // Check if AI APIs are supported
     const checkSupport = async () => {
       const summarizerSupport = summarizerService.isSupported();
       const translatorSupport = translatorService.isSupported();
+      const proofreaderSupport = proofreaderService.isSupported();
       
       setSummarizerSupported(summarizerSupport);
       setTranslatorSupported(translatorSupport);
+      setProofreaderSupported(proofreaderSupport);
       
       if (summarizerSupport) {
         const availability = await summarizerService.checkAvailability();
@@ -57,6 +65,30 @@ export default function StudyMindApp() {
         } catch (error) {
           console.warn('Could not check translator availability:', error);
         }
+      }
+      
+      if (proofreaderSupport) {
+        console.log('Proofreader API supported');
+        try {
+          const proofreaderAvailability = await proofreaderService.checkAvailability(['en']);
+          console.log('Proofreader availability:', proofreaderAvailability);
+          
+          if (proofreaderAvailability === 'downloadable') {
+            console.warn('⚠️ Proofreader model needs to be downloaded. It will download on first use.');
+          } else if (proofreaderAvailability === 'unavailable') {
+            console.warn('❌ Proofreader API unavailable. Please check:');
+            console.warn('1. Chrome version 141+ required');
+            console.warn('2. Enable chrome://flags/#proofreader-api-for-gemini-nano');
+            console.warn('3. Restart Chrome after enabling flags');
+            console.warn('4. May require Origin Trial token');
+          } else if (proofreaderAvailability === 'available') {
+            console.log('✅ Proofreader model ready to use!');
+          }
+        } catch (error) {
+          console.warn('Could not check proofreader availability:', error);
+        }
+      } else {
+        console.warn('❌ Proofreader API not supported. Chrome 141+ with flags enabled required.');
       }
     };
 
@@ -166,6 +198,112 @@ export default function StudyMindApp() {
     }
   };
 
+  const processProofreading = async (text: string): Promise<string> => {
+    try {
+      setIsDownloading(true);
+      setModelDownloadProgress(0);
+      
+      // Check if text is too short or empty
+      if (!text || text.trim().length < 3) {
+        throw new Error('Text too short for proofreading (minimum 3 characters)');
+      }
+      
+      const proofreaderOptions: ProofreaderOptions = {
+        expectedInputLanguages: [aiConfig.proofreadLanguage]
+      };
+
+      // Add delay between API calls to prevent conflicts
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('Starting proofreading with options:', proofreaderOptions);
+      console.log('Calling proofread API with progress tracking...');
+
+      // Add overall timeout for the entire process (5 minutes for large download)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          console.error('Overall proofreading timeout after 5 minutes');
+          reject(new Error('Proofreading timeout (5 minutes) - Model download may still be in progress. Check chrome://on-device-internals/ for download status.'));
+        }, 300000); // 5 minutes = 300000ms
+      });
+
+      // Call proofread with timeout protection
+      const proofreadResult = await Promise.race([
+        proofreaderService.proofread(text, proofreaderOptions, (progress) => {
+          console.log(`Proofreader progress callback: ${progress}%`);
+          setModelDownloadProgress(progress);
+          setIsDownloading(progress < 100);
+        }),
+        timeoutPromise
+      ]);
+      
+      console.log('Proofread completed, result:', proofreadResult);
+      setIsDownloading(false);
+      
+      if (proofreadResult.success && proofreadResult.result) {
+        const { corrected, corrections } = proofreadResult.result;
+        
+        console.log('Corrections found:', corrections?.length || 0);
+        console.log('Corrected text:', corrected);
+        
+        // No corrections needed
+        if (!corrections || corrections.length === 0) {
+          return `✏️ AI-POWERED PROOFREAD:\n\n✅ No corrections needed!\n\nYour text is already well-written with no grammar, spelling, or punctuation errors detected.\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
+        }
+        
+        // Build result with corrections
+        let resultText = `✏️ AI-POWERED PROOFREAD:\n\n`;
+        resultText += `Found ${corrections.length} correction${corrections.length > 1 ? 's' : ''}:\n\n`;
+        
+        corrections.forEach((correction, index) => {
+          resultText += `${index + 1}. `;
+          
+          // Show correction type if enabled
+          if (aiConfig.includeCorrectionTypes && correction.type) {
+            resultText += `[${correction.type.toUpperCase()}] `;
+          }
+          
+          resultText += `"${correction.correction}"\n`;
+          
+          // Show explanation if enabled
+          if (aiConfig.includeCorrectionExplanation && correction.explanation) {
+            resultText += `   💡 ${correction.explanation}\n`;
+          }
+          
+          resultText += '\n';
+        });
+        
+        resultText += `\n📝 CORRECTED TEXT:\n${corrected}\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
+        
+        return resultText;
+      } else {
+        const errorMsg = proofreadResult.error || 'Unknown proofreading error';
+        console.error('Proofreading failed:', errorMsg);
+        throw new Error(`Proofreading failed: ${errorMsg}`);
+      }
+    } catch (error) {
+      console.error('AI proofreading error:', error);
+      setIsDownloading(false);
+      
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('not available')) {
+        errorMessage = `Proofreading for ${aiConfig.proofreadLanguage} is not supported yet`;
+      } else if (errorMessage.includes('User activation')) {
+        errorMessage = 'User interaction required for proofreading API';
+      } else if (errorMessage.includes('not supported')) {
+        errorMessage = 'Proofreader API not available in your Chrome version. Please enable chrome://flags/#proofreader-api-for-gemini-nano';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = 'Proofreading timeout - This is likely due to:\n• Model still downloading (22GB+)\n• API still experimental\n• Chrome needs restart after flag change';
+      }
+      
+      return `❌ AI PROOFREADING FAILED:\n\n${errorMessage}\n\n💡 NOTE: Proofreader API is still in Origin Trial (experimental) and may not work consistently.\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('proofread')}`;
+    }
+  };
+
   const processWithMockAI = (action: string): string => {
     switch (action) {
       case 'summarize':
@@ -220,6 +358,11 @@ export default function StudyMindApp() {
             else if (action === 'translate' && translatorSupported && inputText.trim()) {
               const aiResult = await processTranslation(inputText);
               finalResult += `TRANSLATION (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            }
+            // Use AI for proofread action if supported and text is available
+            else if (action === 'proofread' && proofreaderSupported && inputText.trim()) {
+              const aiResult = await processProofreading(inputText);
+              finalResult += `PROOFREAD (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             } else {
               // Use mock for other actions
               const actionLabel = action.toUpperCase();
@@ -245,6 +388,10 @@ export default function StudyMindApp() {
         // Use AI for translate action if supported and text is available
         else if (action === 'translate' && translatorSupported && inputText.trim()) {
           finalResult = await processTranslation(inputText);
+        }
+        // Use AI for proofread action if supported and text is available
+        else if (action === 'proofread' && proofreaderSupported && inputText.trim()) {
+          finalResult = await processProofreading(inputText);
         } else {
           // Use mock for other actions or when AI is not available
           finalResult = processWithMockAI(action);
@@ -254,6 +401,8 @@ export default function StudyMindApp() {
             finalResult += '\n\n💡 NOTE: AI summarization requires text input. Please enter some text to use Chrome\'s built-in AI.';
           } else if (action === 'translate' && translatorSupported && !inputText.trim()) {
             finalResult += '\n\n💡 NOTE: AI translation requires text input. Please enter some text to use Chrome\'s built-in AI.';
+          } else if (action === 'proofread' && proofreaderSupported && !inputText.trim()) {
+            finalResult += '\n\n💡 NOTE: AI proofreading requires text input. Please enter some text to use Chrome\'s built-in AI.';
           }
         }
       }
@@ -286,12 +435,16 @@ export default function StudyMindApp() {
       />
       
       {/* AI Status Indicators */}
-      {(summarizerSupported || translatorSupported) && (
+      {(summarizerSupported || translatorSupported || proofreaderSupported) && (
         <div className="container mx-auto px-6 pt-4">
           <div className="bg-green-200 border-2 border-[#675D50] p-2 shadow-[2px_2px_0px_0px_#675D50]">
             <p className="text-[#675D50] text-sm font-bold text-center">
               🤖 CHROME AI ENABLED - 
-              {summarizerSupported && ' Real AI summarization'}{summarizerSupported && translatorSupported && ' +'}{translatorSupported && ' Real AI translation'} available for text input!
+              {summarizerSupported && ' Summarization'}
+              {summarizerSupported && (translatorSupported || proofreaderSupported) && ' +'}
+              {translatorSupported && ' Translation'}
+              {translatorSupported && proofreaderSupported && ' +'}
+              {proofreaderSupported && ' Proofreading'} available for text input!
             </p>
           </div>
         </div>
@@ -350,7 +503,7 @@ export default function StudyMindApp() {
         style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}
       >
         STUDYMIND AI - YOUR VINTAGE STUDY COMPANION
-        {(summarizerSupported || translatorSupported) && (
+        {(summarizerSupported || translatorSupported || proofreaderSupported) && (
           <div className="text-xs mt-1 opacity-75">
             🤖 Powered by Chrome&apos;s Built-in AI (Gemini Nano)
           </div>

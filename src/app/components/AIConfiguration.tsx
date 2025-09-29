@@ -11,6 +11,11 @@ export interface AIConfigOptions {
   // Translator options
   translateTo: string;
   translateFrom: string; // 'auto' for auto-detect
+  
+  // Proofreader options
+  proofreadLanguage: string;
+  includeCorrectionTypes: boolean;
+  includeCorrectionExplanation: boolean;
 }
 
 interface AIConfigProps {
@@ -52,7 +57,10 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
       summaryLength: 'medium',
       summaryFormat: 'markdown',
       translateTo: 'id',
-      translateFrom: 'auto'
+      translateFrom: 'auto',
+      proofreadLanguage: 'en',
+      includeCorrectionTypes: true,
+      includeCorrectionExplanation: true
     };
     setLocalConfig(defaultConfig);
   };
@@ -60,11 +68,11 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#F3DEBA] border-4 border-[#675D50] shadow-[8px_8px_0px_0px_#675D50] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-[#F3DEBA] border-4 border-[#675D50] shadow-[8px_8px_0px_0px_#675D50] w-full max-w-4xl my-8">
+        <div className="p-6 max-h-[85vh] overflow-y-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#F3DEBA] pb-4 border-b-2 border-[#675D50]">
             <div className="flex items-center gap-3">
               <Settings className="w-6 h-6 text-[#675D50]" />
               <h2 
@@ -76,9 +84,10 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
             </div>
             <button
               onClick={onClose}
-              className="px-3 py-1 bg-[#675D50] text-[#F3DEBA] font-bold border-2 border-[#675D50] shadow-[2px_2px_0px_0px_#ABC4AA] hover:shadow-[1px_1px_0px_0px_#ABC4AA] hover:translate-x-0.5 hover:translate-y-0.5 transition-all"
+              className="px-3 py-1 bg-red-400 text-[#675D50] font-bold border-2 border-[#675D50] shadow-[2px_2px_0px_0px_#675D50] hover:shadow-[1px_1px_0px_0px_#675D50] hover:translate-x-0.5 hover:translate-y-0.5 transition-all flex items-center gap-1"
             >
               <X className="w-4 h-4" />
+              CLOSE
             </button>
           </div>
 
@@ -183,25 +192,82 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
             </div>
           </div>
 
+          {/* Proofreader Configuration */}
+          <div className="bg-[#ABC4AA] border-2 border-[#675D50] p-4 shadow-[3px_3px_0px_0px_#675D50] mb-4">
+            <h3 className="font-bold text-[#675D50] mb-3 text-lg">✏️ PROOFREADER SETTINGS</h3>
+            
+            <div className="space-y-4">
+              {/* Proofread Language */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Expected Language:</label>
+                <select
+                  value={localConfig.proofreadLanguage}
+                  onChange={(e) => setLocalConfig({...localConfig, proofreadLanguage: e.target.value})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="en">🇺🇸 ENGLISH</option>
+                  <option value="id">🇮🇩 INDONESIAN</option>
+                  <option value="es">🇪🇸 SPANISH</option>
+                  <option value="fr">🇫🇷 FRENCH</option>
+                  <option value="de">🇩🇪 GERMAN</option>
+                </select>
+              </div>
+
+              {/* Correction Options */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localConfig.includeCorrectionTypes}
+                    onChange={(e) => setLocalConfig({...localConfig, includeCorrectionTypes: e.target.checked})}
+                    className="w-4 h-4 border-2 border-[#675D50]"
+                  />
+                  <span className="text-[#675D50] font-bold text-sm">
+                    📌 Include Correction Types
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localConfig.includeCorrectionExplanation}
+                    onChange={(e) => setLocalConfig({...localConfig, includeCorrectionExplanation: e.target.checked})}
+                    className="w-4 h-4 border-2 border-[#675D50]"
+                  />
+                  <span className="text-[#675D50] font-bold text-sm">
+                    💡 Include Correction Explanations
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
+              <p className="text-[#675D50] text-xs">
+                <strong>Correction Types:</strong> Shows error categories (grammar, spelling, punctuation) • 
+                <strong>Explanations:</strong> Provides reasons for each correction
+              </p>
+            </div>
+          </div>
+
           {/* Action Buttons */}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3 sticky bottom-0 bg-[#F3DEBA] pt-4 border-t-2 border-[#675D50]">
             <button
               onClick={handleSave}
-              className="flex-1 px-4 py-2 bg-green-400 text-[#675D50] font-bold border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#675D50] hover:shadow-[1px_1px_0px_0px_#675D50] hover:translate-x-0.5 hover:translate-y-0.5 transition-all"
+              className="flex-1 min-w-[150px] px-4 py-3 bg-green-400 text-[#675D50] font-bold border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#675D50] hover:shadow-[1px_1px_0px_0px_#675D50] hover:translate-x-0.5 hover:translate-y-0.5 transition-all"
             >
               ✅ SAVE SETTINGS
             </button>
             
             <button
               onClick={handleReset}
-              className="px-4 py-2 bg-orange-400 text-[#675D50] font-bold border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#675D50] hover:shadow-[1px_1px_0px_0px_#675D50] hover:translate-x-0.5 hover:translate-y-0.5 transition-all"
+              className="px-4 py-3 bg-orange-400 text-[#675D50] font-bold border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#675D50] hover:shadow-[1px_1px_0px_0px_#675D50] hover:translate-x-0.5 hover:translate-y-0.5 transition-all"
             >
               🔄 RESET
             </button>
             
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-400 text-[#675D50] font-bold border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#675D50] hover:shadow-[1px_1px_0px_0px_#675D50] hover:translate-x-0.5 hover:translate-y-0.5 transition-all"
+              className="px-4 py-3 bg-gray-400 text-[#675D50] font-bold border-2 border-[#675D50] shadow-[3px_3px_0px_0px_#675D50] hover:shadow-[1px_1px_0px_0px_#675D50] hover:translate-x-0.5 hover:translate-y-0.5 transition-all"
             >
               ❌ CANCEL
             </button>
