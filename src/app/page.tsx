@@ -10,6 +10,7 @@ import ResultSection from './components/ResultSection';
 import SummarizerService, { SummarizerOptions } from './services/summarizerService';
 import TranslatorService, { TranslatorOptions } from './services/TranslatorService';
 import ProofreaderService, { ProofreaderOptions } from './services/proofreaderService';
+import WriterService, { WriterOptions } from './services/writerService';
 import { AIConfigOptions } from './components/AIConfiguration';
 
 export default function StudyMindApp() {
@@ -21,6 +22,7 @@ export default function StudyMindApp() {
   const [summarizerSupported, setSummarizerSupported] = useState(false);
   const [translatorSupported, setTranslatorSupported] = useState(false);
   const [proofreaderSupported, setProofreaderSupported] = useState(false);
+  const [writerSupported, setWriterSupported] = useState(false);
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   
@@ -35,11 +37,18 @@ export default function StudyMindApp() {
     includeCorrectionTypes: true,
     includeCorrectionExplanation: true,
     correctionExplanationLanguage: "en",
+    // Writer API config
+    writerTone: 'formal',
+    writerFormat: 'markdown',
+    writerLength: 'medium',
+    numberOfQuestions: 5,
+    questionType: 'mixed'
   });
 
   const summarizerService = SummarizerService.getInstance();
   const translatorService = TranslatorService.getInstance();
   const proofreaderService = ProofreaderService.getInstance();
+  const writerService = WriterService.getInstance();
 
   useEffect(() => {
     // Check if AI APIs are supported
@@ -47,10 +56,12 @@ export default function StudyMindApp() {
       const summarizerSupport = summarizerService.isSupported();
       const translatorSupport = translatorService.isSupported();
       const proofreaderSupport = proofreaderService.isSupported();
+      const writerSupport = writerService.isSupported();
       
       setSummarizerSupported(summarizerSupport);
       setTranslatorSupported(translatorSupport);
       setProofreaderSupported(proofreaderSupport);
+      setWriterSupported(writerSupport);
       
       if (summarizerSupport) {
         const availability = await summarizerService.checkAvailability();
@@ -59,7 +70,6 @@ export default function StudyMindApp() {
       
       if (translatorSupport) {
         console.log('Translator API supported');
-        // Test if we can check availability for a common language pair
         try {
           const translatorAvailability = await translatorService.checkTranslationAvailability('en', 'id');
           console.log('Translator availability (en->id):', translatorAvailability);
@@ -78,20 +88,20 @@ export default function StudyMindApp() {
             includeCorrectionExplanations: true
           };
           const proofreaderAvailability = await proofreaderService.checkAvailability(fullOptions);
-          console.log('Proofreader availability (with full options):', proofreaderAvailability);
-          
-          if (proofreaderAvailability === 'downloadable') {
-            console.warn('⚠️ Proofreader LoRA adapter needs to be downloaded. It will download on first use with correct parameters.');
-          } else if (proofreaderAvailability === 'unavailable') {
-            console.warn('❌ Proofreader API unavailable.');
-          } else if (proofreaderAvailability === 'available') {
-            console.log('✅ Proofreader LoRA adapter ready to use!');
-          }
+          console.log('Proofreader availability:', proofreaderAvailability);
         } catch (error) {
           console.warn('Could not check proofreader availability:', error);
         }
-      } else {
-        console.warn('❌ Proofreader API not supported.');
+      }
+      
+      if (writerSupport) {
+        console.log('Writer API supported');
+        try {
+          const writerAvailability = await writerService.checkAvailability();
+          console.log('Writer availability:', writerAvailability);
+        } catch (error) {
+          console.warn('Could not check writer availability:', error);
+        }
       }
     };
 
@@ -132,17 +142,83 @@ export default function StudyMindApp() {
     }
   };
 
+  const processQuestionGeneration = async (text: string): Promise<string> => {
+    try {
+      setIsDownloading(true);
+      setModelDownloadProgress(0);
+      
+      if (!text || text.trim().length < 10) {
+        throw new Error('Text too short for question generation (minimum 10 characters)');
+      }
+      
+      const writerOptions: WriterOptions = {
+        tone: 'formal',
+        format: 'markdown',
+        length: 'medium',
+        sharedContext: 'Generate educational questions for learning and assessment purposes.'
+      };
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('Starting question generation...');
+
+      let fullResult = '';
+      
+      // Use streaming for real-time output
+      const stream = writerService.generateQuestionsStreaming(
+        text,
+        5, // number of questions
+        'mixed', // question type
+        'These questions should test understanding and knowledge of the content provided.',
+        writerOptions,
+        (progress) => {
+          setModelDownloadProgress(progress);
+          if (progress >= 100) {
+            setIsDownloading(false);
+          }
+        }
+      );
+
+      for await (const chunk of stream) {
+        fullResult += chunk;
+      }
+      
+      if (fullResult) {
+        return `❓ AI-GENERATED QUESTIONS:\n\n${fullResult}\n\n✨ Generated using Chrome's Built-in Writer API (Gemini Nano)`;
+      } else {
+        throw new Error('No questions generated');
+      }
+      
+    } catch (error) {
+      console.error('AI question generation error:', error);
+      setIsDownloading(false);
+      
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      if (errorMessage.includes('not supported')) {
+        errorMessage = 'Writer API not available in your Chrome version. Please enable chrome://flags/#writer-api-for-gemini-nano';
+      } else if (errorMessage.includes('User activation')) {
+        errorMessage = 'User interaction required for Writer API';
+      } else if (errorMessage.includes('cancelled')) {
+        errorMessage = 'Question generation was cancelled by user';
+      }
+      
+      return `❌ AI QUESTION GENERATION FAILED:\n\n${errorMessage}\n\n💡 NOTE: Writer API is in Origin Trial (experimental) and requires proper setup.\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('questions')}`;
+    }
+  };
+
   const processTranslation = async (text: string): Promise<string> => {
     try {
       setIsDownloading(true);
       setModelDownloadProgress(0);
       
-      // Check if text is too short or empty
       if (!text || text.trim().length < 3) {
         throw new Error('Text too short for translation (minimum 3 characters)');
       }
 
-      // Check if translation is needed (same language)
       if (aiConfig.translateFrom !== 'auto' && aiConfig.translateFrom === aiConfig.translateTo) {
         return `🌐 TRANSLATION RESULT:\n\nNo translation needed - source and target languages are the same.\n\nOriginal text: ${text}`;
       }
@@ -152,10 +228,7 @@ export default function StudyMindApp() {
         targetLanguage: aiConfig.translateTo
       };
 
-      // Add delay between API calls to prevent conflicts
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      console.log('Starting translation with options:', translatorOptions);
 
       const translationResult = await translatorService.translate(text, translatorOptions, (progress) => {
         setModelDownloadProgress(progress);
@@ -164,37 +237,26 @@ export default function StudyMindApp() {
         }
       });
       
-      console.log('Translation result:', translationResult);
-      
       if (translationResult.success && translationResult.result) {
         const fromLang = translationResult.detectedLanguage || aiConfig.translateFrom;
         const toLang = aiConfig.translateTo;
         
-        // Check if translation actually happened (sometimes API returns same text)
         if (translationResult.result === text && fromLang !== toLang) {
-          return `🌐 TRANSLATION RESULT:\n\nFrom: ${fromLang.toUpperCase()}\nTo: ${toLang.toUpperCase()}\n\n${translationResult.result}\n\n⚠️ Note: Translation model may not support this language pair yet. Showing original text.`;
+          return `🌐 TRANSLATION RESULT:\n\nFrom: ${fromLang.toUpperCase()}\nTo: ${toLang.toUpperCase()}\n\n${translationResult.result}\n\n⚠️ Note: Translation model may not support this language pair yet.`;
         }
         
         return `🌐 AI-POWERED TRANSLATION:\n\nFrom: ${fromLang.toUpperCase()}\nTo: ${toLang.toUpperCase()}\n\n${translationResult.result}\n\n✨ Generated using Chrome's Built-in AI Translation`;
       } else {
-        const errorMsg = translationResult.error || 'Unknown translation error';
-        console.error('Translation failed:', errorMsg);
-        throw new Error(`Translation failed: ${errorMsg}`);
+        throw new Error(translationResult.error || 'Unknown translation error');
       }
     } catch (error) {
       console.error('AI translation error:', error);
       setIsDownloading(false);
       
-      let errorMessage = 'Unknown error occurred';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+      let errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
-      // Provide more specific error messages
       if (errorMessage.includes('not available')) {
         errorMessage = `Translation from ${aiConfig.translateFrom} to ${aiConfig.translateTo} is not supported yet`;
-      } else if (errorMessage.includes('User activation')) {
-        errorMessage = 'User interaction required for translation API';
       }
       
       return `❌ AI TRANSLATION FAILED:\n\n${errorMessage}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('translate')}`;
@@ -202,10 +264,7 @@ export default function StudyMindApp() {
   };
 
   const processProofreading = async (text: string): Promise<string> => {
-    // --- FIX START ---
-    // Variable to hold the timeout ID so we can clear it.
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    // --- FIX END ---
     
     try {
       setIsDownloading(true);
@@ -224,39 +283,28 @@ export default function StudyMindApp() {
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('Starting proofreading with options:', proofreaderOptions);
-      console.log('Calling proofread API with progress tracking...');
-
-      // --- FIX START ---
-      // This promise will reject after 5 minutes if not cleared.
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
-          console.error('Overall proofreading timeout after 5 minutes');
-          reject(new Error('Proofreading timeout (5 minutes) - Model download may still be in progress. Check chrome://on-device-internals/ for download status.'));
-        }, 300000); // 5 minutes
+          reject(new Error('Proofreading timeout (5 minutes)'));
+        }, 300000);
       });
-      // --- FIX END ---
 
       const proofreadResult = await Promise.race([
         proofreaderService.proofread(text, proofreaderOptions, (progress) => {
-          console.log(`Proofreader progress callback: ${progress}%`);
           setModelDownloadProgress(progress);
           setIsDownloading(progress < 100);
         }),
         timeoutPromise
       ]);
       
-      console.log('Proofread completed, result:', proofreadResult);
-      
       if (proofreadResult.success && proofreadResult.result) {
         const { correctedInput, corrections } = proofreadResult.result;
                 
         if (!corrections || corrections.length === 0) {
-          return `✏️ AI-POWERED PROOFREAD:\n\n✅ No corrections needed!\n\nYour text is already well-written with no grammar, spelling, or punctuation errors detected.\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
+          return `✏️ AI-POWERED PROOFREAD:\n\n✅ No corrections needed!\n\nYour text is already well-written.\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
         }
         
-        let resultText = `✏️ AI-POWERED PROOFREAD:\n\n`;
-        resultText += `Found ${corrections.length} correction${corrections.length > 1 ? 's' : ''}:\n\n`;
+        let resultText = `✏️ AI-POWERED PROOFREAD:\n\nFound ${corrections.length} correction${corrections.length > 1 ? 's' : ''}:\n\n`;
         
         corrections.forEach((correction, index) => {
           resultText += `${index + 1}. `;
@@ -273,55 +321,37 @@ export default function StudyMindApp() {
         resultText += `\n📝 CORRECTED TEXT:\n${correctedInput}\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
         return resultText;
       } else {
-        const errorMsg = proofreadResult.error || 'Unknown proofreading error';
-        throw new Error(`Proofreading failed: ${errorMsg}`);
+        throw new Error(proofreadResult.error || 'Unknown proofreading error');
       }
     } catch (error) {
       console.error('AI proofreading error:', error);
       
-      let errorMessage = 'Unknown error occurred';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
-      if (errorMessage.includes('not available')) {
-        errorMessage = `Proofreading for ${aiConfig.proofreadLanguage} is not supported yet`;
-      } else if (errorMessage.includes('User activation')) {
-        errorMessage = 'User interaction required for proofreading API';
-      } else if (errorMessage.includes('not supported')) {
-        errorMessage = 'Proofreader API not available in your Chrome version. Please enable chrome://flags/#proofreader-api-for-gemini-nano';
-      } else if (errorMessage.includes('timeout')) {
-        errorMessage = 'Proofreading timeout - This is likely due to:\n• Model still downloading (22GB+)\n• API still experimental\n• Chrome needs restart after flag change';
-      }
-      
-      return `❌ AI PROOFREADING FAILED:\n\n${errorMessage}\n\n💡 NOTE: Proofreader API is still in Origin Trial (experimental) and may not work consistently.\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('proofread')}`;
+      return `❌ AI PROOFREADING FAILED:\n\n${errorMessage}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('proofread')}`;
     } finally {
-        // --- FIX START ---
-        // This block will always run, ensuring the timeout is cancelled
-        // and the downloading state is reset correctly.
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-        setIsDownloading(false);
-        // --- FIX END ---
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      setIsDownloading(false);
     }
   };
 
   const processWithMockAI = (action: string): string => {
     switch (action) {
       case 'summarize':
-        return '📝 SUMMARY (MOCK):\n\nThis is a mock summary of your content. The main points have been condensed into key takeaways that capture the essential information while removing unnecessary details.\n\n• Key Point 1: Main concept explained clearly\n• Key Point 2: Supporting evidence provided\n• Key Point 3: Practical applications discussed\n\nThe summary maintains the core message while being concise.';
+        return '📝 SUMMARY (MOCK):\n\nThis is a mock summary. The main points have been condensed into key takeaways.\n\n• Key Point 1\n• Key Point 2\n• Key Point 3';
       case 'questions':
-        return '❓ QUESTIONS GENERATED:\n\n1. What are the key concepts mentioned in this content?\n\n2. How does this information relate to the main topic?\n\n3. What examples or evidence support the main points?\n\n4. What practical applications can be derived from this?\n\n5. What conclusions can be drawn from the presented information?\n\n6. How might this knowledge be applied in real-world scenarios?';
+        return '❓ QUESTIONS GENERATED (MOCK):\n\n1. What are the key concepts mentioned?\n2. How does this relate to the main topic?\n3. What examples support the main points?\n4. What practical applications can be derived?\n5. What conclusions can be drawn?';
       case 'translate':
         const targetLang = aiConfig.translateTo === 'id' ? 'Indonesian' : 'English';
-        return `🌐 TRANSLATION RESULT (MOCK):\n\n[${targetLang}] ${aiConfig.translateTo === 'id' ? 'Ini adalah hasil terjemahan dari konten yang Anda berikan. Teks telah diterjemahkan dengan mempertahankan makna dan konteks asli.' : 'This is the translation result of the content you provided. The text has been translated while maintaining the original meaning and context.'}\n\nTranslation considers:\n• Cultural and linguistic context\n• Literal and connotative meaning\n• Natural sentence structure\n• Appropriate terminology`;
+        return `🌐 TRANSLATION RESULT (MOCK):\n\n[${targetLang}] Mock translation result.`;
       case 'proofread':
-        return '✏️ PROOFREAD COMPLETE:\n\n✅ Grammar: No errors found\n✅ Spelling: All correct\n✅ Punctuation: Properly used\n✅ Sentence Structure: Well-formed\n\n📝 SUGGESTIONS:\n• Consider varying sentence structure for better flow\n• Some paragraphs could be shortened for clarity\n• Add transition words to improve coherence\n\nOverall Score: 95/100 - Excellent writing quality!';
+        return '✏️ PROOFREAD COMPLETE (MOCK):\n\n✅ Grammar: No errors\n✅ Spelling: Correct\n✅ Punctuation: Proper\n\nScore: 95/100';
       case 'improve':
-        return '🚀 WRITING IMPROVED:\n\nYour content has been enhanced for clarity, flow, and engagement. Here are the key improvements made:\n\n📈 ENHANCEMENTS:\n• Clearer sentence structure\n• More engaging vocabulary\n• Better paragraph organization\n• Improved transitions\n• Enhanced readability\n\nThe improved version maintains your original message while making it more impactful, professional, and easier to understand.';
+        return '🚀 WRITING IMPROVED (MOCK):\n\nYour content has been enhanced for clarity and engagement.';
       case 'explain':
-        return '🤔 SIMPLE EXPLANATION:\n\nHere\'s a simplified breakdown of the concept:\n\n🎯 MAIN IDEA:\nThe core concept explained in simple, everyday language that anyone can understand.\n\n💡 WHY IT MATTERS:\nThis is important because it affects how we think about and approach similar problems or situations.\n\n📖 EASY EXAMPLE:\nThink of it like riding a bicycle - once you understand the basic balance and pedaling, the complex physics becomes natural.\n\n🔑 KEY TAKEAWAY:\nRemember this simple rule that captures the essence of the entire concept.';
+        return '🤔 SIMPLE EXPLANATION (MOCK):\n\nHere\'s a simplified breakdown of the concept.';
       default:
         return 'Unknown action requested.';
     }
@@ -352,33 +382,38 @@ export default function StudyMindApp() {
             
             if (action === 'summarize' && summarizerSupported && inputText.trim()) {
               const aiResult = await processSummarization(inputText);
-              finalResult += `SUMMARY (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+              finalResult += `SUMMARY:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            }
+            else if (action === 'questions' && writerSupported && inputText.trim()) {
+              const aiResult = await processQuestionGeneration(inputText);
+              finalResult += `QUESTIONS:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             }
             else if (action === 'translate' && translatorSupported && inputText.trim()) {
               const aiResult = await processTranslation(inputText);
-              finalResult += `TRANSLATION (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+              finalResult += `TRANSLATION:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             }
             else if (action === 'proofread' && proofreaderSupported && inputText.trim()) {
               const aiResult = await processProofreading(inputText);
-              finalResult += `PROOFREAD (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+              finalResult += `PROOFREAD:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             } else {
-              const actionLabel = action.toUpperCase();
               const mockResult = processWithMockAI(action);
-              finalResult += `${actionLabel}: ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+              finalResult += `${action.toUpperCase()}: ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             }
           } catch (error) {
-            console.error(`Error processing action ${action}:`, error);
-            const actionLabel = action.toUpperCase();
+            console.error(`Error processing ${action}:`, error);
             const mockResult = processWithMockAI(action);
-            finalResult += `${actionLabel} (FALLBACK): ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            finalResult += `${action.toUpperCase()} (FALLBACK): ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
           }
         }
-        finalResult += `✨ All ${selectedActions.length} operations completed successfully!`;
+        finalResult += `✨ All ${selectedActions.length} operations completed!`;
       } else {
         const action = selectedActions[0];
         
         if (action === 'summarize' && summarizerSupported && inputText.trim()) {
           finalResult = await processSummarization(inputText);
+        }
+        else if (action === 'questions' && writerSupported && inputText.trim()) {
+          finalResult = await processQuestionGeneration(inputText);
         }
         else if (action === 'translate' && translatorSupported && inputText.trim()) {
           finalResult = await processTranslation(inputText);
@@ -387,21 +422,13 @@ export default function StudyMindApp() {
           finalResult = await processProofreading(inputText);
         } else {
           finalResult = processWithMockAI(action);
-          
-          if (action === 'summarize' && summarizerSupported && !inputText.trim()) {
-            finalResult += '\n\n💡 NOTE: AI summarization requires text input. Please enter some text to use Chrome\'s built-in AI.';
-          } else if (action === 'translate' && translatorSupported && !inputText.trim()) {
-            finalResult += '\n\n💡 NOTE: AI translation requires text input. Please enter some text to use Chrome\'s built-in AI.';
-          } else if (action === 'proofread' && proofreaderSupported && !inputText.trim()) {
-            finalResult += '\n\n💡 NOTE: AI proofreading requires text input. Please enter some text to use Chrome\'s built-in AI.';
-          }
         }
       }
       
       setResult(finalResult);
     } catch (error) {
       console.error('Processing error:', error);
-      setResult(`❌ PROCESSING ERROR:\n\nAn error occurred while processing your request: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or check the AI Status for more information.`);
+      setResult(`❌ PROCESSING ERROR:\n\n${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsProcessing(false);
       setIsDownloading(false);
@@ -425,16 +452,18 @@ export default function StudyMindApp() {
         onConfigChange={setAiConfig}
       />
       
-      {(summarizerSupported || translatorSupported || proofreaderSupported) && (
+      {(summarizerSupported || translatorSupported || proofreaderSupported || writerSupported) && (
         <div className="container mx-auto px-6 pt-4">
           <div className="bg-green-200 border-2 border-[#675D50] p-2 shadow-[2px_2px_0px_0px_#675D50]">
             <p className="text-[#675D50] text-sm font-bold text-center">
               🤖 CHROME AI ENABLED - 
               {summarizerSupported && ' Summarization'}
-              {summarizerSupported && (translatorSupported || proofreaderSupported) && ' +'}
+              {summarizerSupported && (translatorSupported || proofreaderSupported || writerSupported) && ' +'}
               {translatorSupported && ' Translation'}
-              {translatorSupported && proofreaderSupported && ' +'}
-              {proofreaderSupported && ' Proofreading'} available for text input!
+              {translatorSupported && (proofreaderSupported || writerSupported) && ' +'}
+              {proofreaderSupported && ' Proofreading'}
+              {proofreaderSupported && writerSupported && ' +'}
+              {writerSupported && ' Question Generation'} available!
             </p>
           </div>
         </div>
@@ -490,7 +519,7 @@ export default function StudyMindApp() {
         style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}
       >
         STUDYMIND AI - YOUR VINTAGE STUDY COMPANION
-        {(summarizerSupported || translatorSupported || proofreaderSupported) && (
+        {(summarizerSupported || translatorSupported || proofreaderSupported || writerSupported) && (
           <div className="text-xs mt-1 opacity-75">
             🤖 Powered by Chrome&apos;s Built-in AI (Gemini Nano)
           </div>

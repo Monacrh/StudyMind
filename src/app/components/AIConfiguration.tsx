@@ -17,6 +17,13 @@ export interface AIConfigOptions {
   includeCorrectionTypes: boolean;
   includeCorrectionExplanation: boolean;
   correctionExplanationLanguage: string;
+  
+  // Writer options (NEW)
+  writerTone: 'formal' | 'neutral' | 'casual';
+  writerFormat: 'markdown' | 'plain-text';
+  writerLength: 'short' | 'medium' | 'long';
+  numberOfQuestions: number;
+  questionType: 'multiple-choice' | 'essay' | 'short-answer' | 'true-false' | 'mixed';
 }
 
 interface AIConfigProps {
@@ -62,7 +69,12 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
       proofreadLanguage: 'en',
       includeCorrectionTypes: true,
       includeCorrectionExplanation: true,
-      correctionExplanationLanguage: 'en'
+      correctionExplanationLanguage: 'en',
+      writerTone: 'formal',
+      writerFormat: 'markdown',
+      writerLength: 'medium',
+      numberOfQuestions: 5,
+      questionType: 'mixed'
     };
     setLocalConfig(defaultConfig);
   };
@@ -141,13 +153,104 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
               </div>
             </div>
 
-            {/* Summary Type Descriptions */}
             <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
               <p className="text-[#675D50] text-xs">
-                <strong>KEY POINTS:</strong> Bullet list of important points • 
+                <strong>KEY POINTS:</strong> Bullet list • 
                 <strong>TL;DR:</strong> Quick overview • 
-                <strong>TEASER:</strong> Most interesting parts • 
-                <strong>HEADLINE:</strong> Single sentence summary
+                <strong>TEASER:</strong> Interesting parts • 
+                <strong>HEADLINE:</strong> Single sentence
+              </p>
+            </div>
+          </div>
+
+          {/* Writer Configuration (NEW) */}
+          <div className="bg-[#ABC4AA] border-2 border-[#675D50] p-4 shadow-[3px_3px_0px_0px_#675D50] mb-4">
+            <h3 className="font-bold text-[#675D50] mb-3 text-lg">❓ WRITER SETTINGS (Question Generator)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* Number of Questions */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Number of Questions:</label>
+                <select
+                  value={localConfig.numberOfQuestions}
+                  onChange={(e) => setLocalConfig({...localConfig, numberOfQuestions: parseInt(e.target.value)})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="3">3 QUESTIONS</option>
+                  <option value="5">5 QUESTIONS</option>
+                  <option value="10">10 QUESTIONS</option>
+                  <option value="15">15 QUESTIONS</option>
+                  <option value="20">20 QUESTIONS</option>
+                </select>
+              </div>
+
+              {/* Question Type */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Question Type:</label>
+                <select
+                  value={localConfig.questionType}
+                  onChange={(e) => setLocalConfig({...localConfig, questionType: e.target.value as AIConfigOptions['questionType']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="mixed">MIXED TYPES</option>
+                  <option value="multiple-choice">MULTIPLE CHOICE</option>
+                  <option value="essay">ESSAY</option>
+                  <option value="short-answer">SHORT ANSWER</option>
+                  <option value="true-false">TRUE/FALSE</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Writer Tone */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Tone:</label>
+                <select
+                  value={localConfig.writerTone}
+                  onChange={(e) => setLocalConfig({...localConfig, writerTone: e.target.value as AIConfigOptions['writerTone']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="formal">FORMAL</option>
+                  <option value="neutral">NEUTRAL</option>
+                  <option value="casual">CASUAL</option>
+                </select>
+              </div>
+
+              {/* Writer Length */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Detail Level:</label>
+                <select
+                  value={localConfig.writerLength}
+                  onChange={(e) => setLocalConfig({...localConfig, writerLength: e.target.value as AIConfigOptions['writerLength']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="short">SHORT</option>
+                  <option value="medium">MEDIUM</option>
+                  <option value="long">LONG</option>
+                </select>
+              </div>
+
+              {/* Writer Format */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Format:</label>
+                <select
+                  value={localConfig.writerFormat}
+                  onChange={(e) => setLocalConfig({...localConfig, writerFormat: e.target.value as AIConfigOptions['writerFormat']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="markdown">MARKDOWN</option>
+                  <option value="plain-text">PLAIN TEXT</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
+              <p className="text-[#675D50] text-xs">
+                <strong>MIXED:</strong> Variety of question types • 
+                <strong>MULTIPLE CHOICE:</strong> 4 options • 
+                <strong>ESSAY:</strong> Detailed answers • 
+                <strong>SHORT ANSWER:</strong> Brief responses • 
+                <strong>TRUE/FALSE:</strong> T/F questions
               </p>
             </div>
           </div>
@@ -188,8 +291,8 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
 
             <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
               <p className="text-[#675D50] text-xs">
-                <strong>Auto Detect:</strong> Let AI detect the source language automatically • 
-                <strong>Manual:</strong> Specify exact source language for better accuracy
+                <strong>Auto Detect:</strong> Let AI detect source language • 
+                <strong>Manual:</strong> Specify exact source for better accuracy
               </p>
             </div>
           </div>
@@ -246,7 +349,7 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
             <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
               <p className="text-[#675D50] text-xs">
                 <strong>Correction Types:</strong> Shows error categories (grammar, spelling, punctuation) • 
-                <strong>Explanations:</strong> Provides reasons for each correction
+                <strong>Explanations:</strong> Provides reasons for corrections
               </p>
             </div>
           </div>
