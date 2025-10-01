@@ -2,6 +2,9 @@
 
 export interface ProofreaderOptions {
   expectedInputLanguages: string[];
+  correctionExplanationLanguage?: string;
+  includeCorrectionTypes?: boolean;
+  includeCorrectionExplanations?: boolean;
 }
 
 export interface Correction {
@@ -13,7 +16,7 @@ export interface Correction {
 }
 
 export interface ProofreadResult {
-  corrected: string;
+  correctedInput: string;
   corrections: Correction[];
 }
 
@@ -26,6 +29,9 @@ export interface ProofreaderServiceResult {
 // Type definitions for Chrome Proofreader API
 interface ProofreaderCreateOptions {
   expectedInputLanguages: string[];
+  correctionExplanationLanguage?: string;
+  includeCorrectionTypes?: boolean;
+  includeCorrectionExplanations?: boolean;
   monitor?: (monitor: DownloadProgressMonitor) => void;
 }
 
@@ -39,6 +45,7 @@ interface DownloadProgressEvent {
 
 interface ProofreaderInstance {
   proofread(text: string): Promise<ProofreadResult>;
+  ready?: Promise<void>; // Important: wait for model to be ready
   destroy?(): void;
 }
 
@@ -71,15 +78,22 @@ class ProofreaderService {
     return 'Proofreader' in window;
   }
 
-  // Check model availability
-  async checkAvailability(languages?: string[]): Promise<string> {
+  // Check model availability - Now accepts full options
+  async checkAvailability(options?: ProofreaderOptions): Promise<string> {
     if (!this.isSupported()) {
       return 'unavailable';
     }
 
     try {
-      const options = languages ? { expectedInputLanguages: languages } : undefined;
-      const availability = await window.Proofreader!.availability(options);
+      const checkOptions = options ? {
+        expectedInputLanguages: options.expectedInputLanguages,
+        correctionExplanationLanguage: options.correctionExplanationLanguage,
+        includeCorrectionTypes: options.includeCorrectionTypes,
+        includeCorrectionExplanations: options.includeCorrectionExplanations
+      } : undefined;
+      
+      console.log('Checking availability with options:', checkOptions);
+      const availability = await window.Proofreader!.availability(checkOptions);
       return availability;
     } catch (error) {
       console.error('Error checking proofreader availability:', error);
@@ -90,7 +104,8 @@ class ProofreaderService {
   // Create proofreader with options
   async createProofreader(
     options: ProofreaderOptions,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    retry: number = 0
   ): Promise<boolean> {
     if (!this.isSupported()) {
       throw new Error('Proofreader API not supported in this browser');
@@ -101,14 +116,25 @@ class ProofreaderService {
       throw new Error('User activation required. Please click a button to trigger proofreading.');
     }
 
-    // Return existing proofreader if available
-    if (this.proofreader) {
+    // Return existing proofreader if available and not retrying
+    if (this.proofreader && retry === 0) {
       console.log('Reusing existing proofreader instance');
       return true;
     }
 
+    // Destroy old instance if retrying
+    if (retry > 0 && this.proofreader) {
+      console.log(`Retry attempt ${retry}: Destroying old instance...`);
+      try {
+        this.proofreader.destroy?.();
+      } catch (e) {
+        console.warn('Error destroying old instance:', e);
+      }
+      this.proofreader = null;
+    }
+
     try {
-      const availability = await this.checkAvailability(options.expectedInputLanguages);
+      const availability = await this.checkAvailability(options);
       
       console.log('Proofreader availability check:', availability);
       
@@ -125,6 +151,9 @@ class ProofreaderService {
 
       const proofreaderOptions: ProofreaderCreateOptions = {
         expectedInputLanguages: options.expectedInputLanguages,
+        correctionExplanationLanguage: options.correctionExplanationLanguage || options.expectedInputLanguages[0],
+        includeCorrectionTypes: options.includeCorrectionTypes !== undefined ? options.includeCorrectionTypes : true,
+        includeCorrectionExplanations: options.includeCorrectionExplanations !== undefined ? options.includeCorrectionExplanations : true,
         monitor: onProgress ? (monitor: DownloadProgressMonitor) => {
           console.log('Monitor registered, setting up progress listener...');
           monitor.addEventListener('downloadprogress', (event: DownloadProgressEvent) => {
@@ -139,15 +168,57 @@ class ProofreaderService {
         } : undefined
       };
 
+      console.log('Full proofreader options:', proofreaderOptions);
+
       console.log('Calling Proofreader.create()...');
-      this.proofreader = await window.Proofreader!.create(proofreaderOptions);
+      
+      // Add timeout specifically for create() call
+      const createTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Proofreader.create() timeout after 60 seconds'));
+        }, 60000);
+      });
+
+      this.proofreader = await Promise.race([
+        window.Proofreader!.create(proofreaderOptions),
+        createTimeout
+      ]);
+      
       console.log('Proofreader.create() completed successfully');
+      
+      // CRITICAL: Wait for ready signal before using
+      if (this.proofreader.ready) {
+        console.log('Waiting for proofreader to be ready...');
+        
+        const readyTimeout = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Proofreader.ready timeout after 30 seconds'));
+          }, 30000);
+        });
+        
+        await Promise.race([
+          this.proofreader.ready,
+          readyTimeout
+        ]);
+        
+        console.log('Proofreader is ready!');
+      } else {
+        console.log('No ready promise, proofreader should be immediately available');
+      }
       
       this.isModelDownloading = false;
       return true;
     } catch (error) {
       console.error('Error creating proofreader:', error);
       this.isModelDownloading = false;
+      
+      // Retry once if timeout
+      if (retry === 0 && error instanceof Error && error.message.includes('timeout')) {
+        console.warn('Proofreader creation timeout, retrying once...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return this.createProofreader(options, onProgress, 1);
+      }
+      
       throw error;
     }
   }

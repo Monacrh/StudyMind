@@ -16,6 +16,7 @@ export interface AIConfigOptions {
   proofreadLanguage: string;
   includeCorrectionTypes: boolean;
   includeCorrectionExplanation: boolean;
+  correctionExplanationLanguage: string;
 }
 
 interface AIConfigProps {
@@ -60,7 +61,8 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
       translateFrom: 'auto',
       proofreadLanguage: 'en',
       includeCorrectionTypes: true,
-      includeCorrectionExplanation: true
+      includeCorrectionExplanation: true,
+      correctionExplanationLanguage: 'en'
     };
     setLocalConfig(defaultConfig);
   };

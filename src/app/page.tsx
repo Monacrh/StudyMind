@@ -33,7 +33,8 @@ export default function StudyMindApp() {
     translateFrom: 'auto',
     proofreadLanguage: 'en',
     includeCorrectionTypes: true,
-    includeCorrectionExplanation: true
+    includeCorrectionExplanation: true,
+    correctionExplanationLanguage: "en",
   });
 
   const summarizerService = SummarizerService.getInstance();
@@ -70,25 +71,27 @@ export default function StudyMindApp() {
       if (proofreaderSupport) {
         console.log('Proofreader API supported');
         try {
-          const proofreaderAvailability = await proofreaderService.checkAvailability(['en']);
-          console.log('Proofreader availability:', proofreaderAvailability);
+          const fullOptions: ProofreaderOptions = {
+            expectedInputLanguages: ['en'],
+            correctionExplanationLanguage: 'en',
+            includeCorrectionTypes: true,
+            includeCorrectionExplanations: true
+          };
+          const proofreaderAvailability = await proofreaderService.checkAvailability(fullOptions);
+          console.log('Proofreader availability (with full options):', proofreaderAvailability);
           
           if (proofreaderAvailability === 'downloadable') {
-            console.warn('⚠️ Proofreader model needs to be downloaded. It will download on first use.');
+            console.warn('⚠️ Proofreader LoRA adapter needs to be downloaded. It will download on first use with correct parameters.');
           } else if (proofreaderAvailability === 'unavailable') {
-            console.warn('❌ Proofreader API unavailable. Please check:');
-            console.warn('1. Chrome version 141+ required');
-            console.warn('2. Enable chrome://flags/#proofreader-api-for-gemini-nano');
-            console.warn('3. Restart Chrome after enabling flags');
-            console.warn('4. May require Origin Trial token');
+            console.warn('❌ Proofreader API unavailable.');
           } else if (proofreaderAvailability === 'available') {
-            console.log('✅ Proofreader model ready to use!');
+            console.log('✅ Proofreader LoRA adapter ready to use!');
           }
         } catch (error) {
           console.warn('Could not check proofreader availability:', error);
         }
       } else {
-        console.warn('❌ Proofreader API not supported. Chrome 141+ with flags enabled required.');
+        console.warn('❌ Proofreader API not supported.');
       }
     };
 
@@ -199,34 +202,41 @@ export default function StudyMindApp() {
   };
 
   const processProofreading = async (text: string): Promise<string> => {
+    // --- FIX START ---
+    // Variable to hold the timeout ID so we can clear it.
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    // --- FIX END ---
+    
     try {
       setIsDownloading(true);
       setModelDownloadProgress(0);
       
-      // Check if text is too short or empty
       if (!text || text.trim().length < 3) {
         throw new Error('Text too short for proofreading (minimum 3 characters)');
       }
       
       const proofreaderOptions: ProofreaderOptions = {
-        expectedInputLanguages: [aiConfig.proofreadLanguage]
+        expectedInputLanguages: [aiConfig.proofreadLanguage],
+        correctionExplanationLanguage: aiConfig.proofreadLanguage,
+        includeCorrectionTypes: aiConfig.includeCorrectionTypes,
+        includeCorrectionExplanations: aiConfig.includeCorrectionExplanation
       };
 
-      // Add delay between API calls to prevent conflicts
       await new Promise(resolve => setTimeout(resolve, 500));
 
       console.log('Starting proofreading with options:', proofreaderOptions);
       console.log('Calling proofread API with progress tracking...');
 
-      // Add overall timeout for the entire process (5 minutes for large download)
+      // --- FIX START ---
+      // This promise will reject after 5 minutes if not cleared.
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           console.error('Overall proofreading timeout after 5 minutes');
           reject(new Error('Proofreading timeout (5 minutes) - Model download may still be in progress. Check chrome://on-device-internals/ for download status.'));
-        }, 300000); // 5 minutes = 300000ms
+        }, 300000); // 5 minutes
       });
+      // --- FIX END ---
 
-      // Call proofread with timeout protection
       const proofreadResult = await Promise.race([
         proofreaderService.proofread(text, proofreaderOptions, (progress) => {
           console.log(`Proofreader progress callback: ${progress}%`);
@@ -237,59 +247,43 @@ export default function StudyMindApp() {
       ]);
       
       console.log('Proofread completed, result:', proofreadResult);
-      setIsDownloading(false);
       
       if (proofreadResult.success && proofreadResult.result) {
-        const { corrected, corrections } = proofreadResult.result;
-        
-        console.log('Corrections found:', corrections?.length || 0);
-        console.log('Corrected text:', corrected);
-        
-        // No corrections needed
+        const { correctedInput, corrections } = proofreadResult.result;
+                
         if (!corrections || corrections.length === 0) {
           return `✏️ AI-POWERED PROOFREAD:\n\n✅ No corrections needed!\n\nYour text is already well-written with no grammar, spelling, or punctuation errors detected.\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
         }
         
-        // Build result with corrections
         let resultText = `✏️ AI-POWERED PROOFREAD:\n\n`;
         resultText += `Found ${corrections.length} correction${corrections.length > 1 ? 's' : ''}:\n\n`;
         
         corrections.forEach((correction, index) => {
           resultText += `${index + 1}. `;
-          
-          // Show correction type if enabled
           if (aiConfig.includeCorrectionTypes && correction.type) {
             resultText += `[${correction.type.toUpperCase()}] `;
           }
-          
           resultText += `"${correction.correction}"\n`;
-          
-          // Show explanation if enabled
           if (aiConfig.includeCorrectionExplanation && correction.explanation) {
             resultText += `   💡 ${correction.explanation}\n`;
           }
-          
           resultText += '\n';
         });
         
-        resultText += `\n📝 CORRECTED TEXT:\n${corrected}\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
-        
+        resultText += `\n📝 CORRECTED TEXT:\n${correctedInput}\n\n✨ Generated using Chrome's Built-in AI Proofreader`;
         return resultText;
       } else {
         const errorMsg = proofreadResult.error || 'Unknown proofreading error';
-        console.error('Proofreading failed:', errorMsg);
         throw new Error(`Proofreading failed: ${errorMsg}`);
       }
     } catch (error) {
       console.error('AI proofreading error:', error);
-      setIsDownloading(false);
       
       let errorMessage = 'Unknown error occurred';
       if (error instanceof Error) {
         errorMessage = error.message;
       }
       
-      // Provide more specific error messages
       if (errorMessage.includes('not available')) {
         errorMessage = `Proofreading for ${aiConfig.proofreadLanguage} is not supported yet`;
       } else if (errorMessage.includes('User activation')) {
@@ -301,6 +295,15 @@ export default function StudyMindApp() {
       }
       
       return `❌ AI PROOFREADING FAILED:\n\n${errorMessage}\n\n💡 NOTE: Proofreader API is still in Origin Trial (experimental) and may not work consistently.\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('proofread')}`;
+    } finally {
+        // --- FIX START ---
+        // This block will always run, ensuring the timeout is cancelled
+        // and the downloading state is reset correctly.
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+        setIsDownloading(false);
+        // --- FIX END ---
     }
   };
 
@@ -335,7 +338,6 @@ export default function StudyMindApp() {
     try {
       let finalResult = '';
       
-      // Handle multiple actions
       if (selectedActions.length > 1) {
         finalResult = `🔄 COMBINED OPERATIONS COMPLETED:\n\n`;
         
@@ -344,27 +346,22 @@ export default function StudyMindApp() {
           finalResult += `${i + 1}. `;
           
           try {
-            // Add delay between operations to prevent API conflicts
             if (i > 0) {
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
             
-            // Use AI for summarize action if supported and text is available
             if (action === 'summarize' && summarizerSupported && inputText.trim()) {
               const aiResult = await processSummarization(inputText);
               finalResult += `SUMMARY (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             }
-            // Use AI for translate action if supported and text is available
             else if (action === 'translate' && translatorSupported && inputText.trim()) {
               const aiResult = await processTranslation(inputText);
               finalResult += `TRANSLATION (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             }
-            // Use AI for proofread action if supported and text is available
             else if (action === 'proofread' && proofreaderSupported && inputText.trim()) {
               const aiResult = await processProofreading(inputText);
               finalResult += `PROOFREAD (AI-POWERED):\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             } else {
-              // Use mock for other actions
               const actionLabel = action.toUpperCase();
               const mockResult = processWithMockAI(action);
               finalResult += `${actionLabel}: ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
@@ -378,25 +375,19 @@ export default function StudyMindApp() {
         }
         finalResult += `✨ All ${selectedActions.length} operations completed successfully!`;
       } else {
-        // Handle single action
         const action = selectedActions[0];
         
-        // Use AI for summarize action if supported and text is available
         if (action === 'summarize' && summarizerSupported && inputText.trim()) {
           finalResult = await processSummarization(inputText);
         }
-        // Use AI for translate action if supported and text is available
         else if (action === 'translate' && translatorSupported && inputText.trim()) {
           finalResult = await processTranslation(inputText);
         }
-        // Use AI for proofread action if supported and text is available
         else if (action === 'proofread' && proofreaderSupported && inputText.trim()) {
           finalResult = await processProofreading(inputText);
         } else {
-          // Use mock for other actions or when AI is not available
           finalResult = processWithMockAI(action);
           
-          // Add note if AI is available but not used
           if (action === 'summarize' && summarizerSupported && !inputText.trim()) {
             finalResult += '\n\n💡 NOTE: AI summarization requires text input. Please enter some text to use Chrome\'s built-in AI.';
           } else if (action === 'translate' && translatorSupported && !inputText.trim()) {
@@ -434,7 +425,6 @@ export default function StudyMindApp() {
         onConfigChange={setAiConfig}
       />
       
-      {/* AI Status Indicators */}
       {(summarizerSupported || translatorSupported || proofreaderSupported) && (
         <div className="container mx-auto px-6 pt-4">
           <div className="bg-green-200 border-2 border-[#675D50] p-2 shadow-[2px_2px_0px_0px_#675D50]">
@@ -450,7 +440,6 @@ export default function StudyMindApp() {
         </div>
       )}
       
-      {/* Model Download Progress */}
       {isDownloading && (
         <div className="container mx-auto px-6 pt-2">
           <div className="bg-[#F3DEBA] border-2 border-[#675D50] p-3 shadow-[2px_2px_0px_0px_#675D50]">
@@ -471,7 +460,6 @@ export default function StudyMindApp() {
       )}
       
       <div className="container mx-auto p-6 max-w-5xl">
-        {/* Top Section - Input and Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <InputSection 
             inputText={inputText}
@@ -494,7 +482,6 @@ export default function StudyMindApp() {
           onProcess={handleProcess}
         />
         
-        {/* Bottom Section - Results */}
         <ResultSection result={result} />
       </div>
 
