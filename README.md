@@ -4,7 +4,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 First, clone the git
 ```bash
-git clone
+git clone https://github.com/Monacrh/StudyMind.git
 ```
 Second, run the development server:
 
