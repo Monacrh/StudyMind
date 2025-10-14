@@ -6,6 +6,9 @@ First, clone the git
 ```bash
 git clone https://github.com/Monacrh/StudyMind.git
 ```
+Second, install the package
+```
+```
 Second, run the development server:
 
 ```bash
