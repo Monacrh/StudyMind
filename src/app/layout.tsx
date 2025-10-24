@@ -19,14 +19,16 @@ export const metadata: Metadata = {
   other: {
     // Gunakan array untuk menampung semua token Origin Trial
     'origin-trial': [
-      // Token untuk Writer API (dari file asli kamu)
+      // Token untuk Writer API
       'Atqb/wGDlBk1i8ORWTVZgqa0NxvigKUZiX+zF7OTUa3vwoDkuZr/L2OvCYzlDLN8RMEs3zlX+SFtmt/2KdDlrAsAAABOeyJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJmZWF0dXJlIjoiQUlXcml0ZXJBUEkiLCJleHBpcnkiOjE3Njk0NzIwMDB9', 
       
-      // Token untuk Proofreader API (dari prompt terbaru kamu)
+      // Token untuk Proofreader API
       'AoBrNWZcn2CqtE1uE9nSbCjI+TBQLZN/PJJxNwo9ToEhvaUl0Yoon2gb9W6B06R+s7DgE3Vpxeb/pF0DXZVmsAcAAABTeyJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJmZWF0dXJlIjoiQUlQcm9vZnJlYWRlckFQSSIsImV4cGlyeSI6MTc3OTE0ODgwMH0=',
       
-      // Kamu bisa menambahkan token lainnya di sini
-      // 'TOKEN_UNTUK_REWRITER_API_DI_SINI',
+      // Token untuk Rewriter API
+      'Av7dzM9937eJVxOC7yz8gyfzrA7IlFRbJmuUdNv0xqFEke7fzgDyicClC8chz+zJwutQ2aXACfL/sLt8wPnnYgkAAABQeyJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJmZWF0dXJlIjoiQUlSZXdyaXRlckFQSSIsImV4cGlyeSI6MTc2OTQ3MjAwMH0=',
+
+      // Token untuk Prompt API
     ]
   }
 };

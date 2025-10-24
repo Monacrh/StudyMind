@@ -18,12 +18,17 @@ export interface AIConfigOptions {
   includeCorrectionExplanation: boolean;
   correctionExplanationLanguage: string;
   
-  // Writer options (NEW)
+  // Writer options
   writerTone: 'formal' | 'neutral' | 'casual';
   writerFormat: 'markdown' | 'plain-text';
   writerLength: 'short' | 'medium' | 'long';
   numberOfQuestions: number;
   questionType: 'multiple-choice' | 'essay' | 'short-answer' | 'true-false' | 'mixed';
+  
+  // Rewriter options (NEW)
+  rewriterTone: 'as-is' | 'more-formal' | 'more-casual';
+  rewriterFormat: 'as-is' | 'markdown' | 'plain-text';
+  rewriterLength: 'as-is' | 'shorter' | 'longer';
 }
 
 interface AIConfigProps {
@@ -74,7 +79,10 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
       writerFormat: 'markdown',
       writerLength: 'medium',
       numberOfQuestions: 5,
-      questionType: 'mixed'
+      questionType: 'mixed',
+      rewriterTone: 'as-is',
+      rewriterFormat: 'as-is',
+      rewriterLength: 'as-is'
     };
     setLocalConfig(defaultConfig);
   };
@@ -163,7 +171,7 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
             </div>
           </div>
 
-          {/* Writer Configuration (NEW) */}
+          {/* Writer Configuration */}
           <div className="bg-[#ABC4AA] border-2 border-[#675D50] p-4 shadow-[3px_3px_0px_0px_#675D50] mb-4">
             <h3 className="font-bold text-[#675D50] mb-3 text-lg">❓ WRITER SETTINGS (Question Generator)</h3>
             
@@ -350,6 +358,65 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
               <p className="text-[#675D50] text-xs">
                 <strong>Correction Types:</strong> Shows error categories (grammar, spelling, punctuation) • 
                 <strong>Explanations:</strong> Provides reasons for corrections
+              </p>
+            </div>
+          </div>
+
+          {/* Rewriter Configuration (NEW) */}
+          <div className="bg-[#ABC4AA] border-2 border-[#675D50] p-4 shadow-[3px_3px_0px_0px_#675D50] mb-4">
+            <h3 className="font-bold text-[#675D50] mb-3 text-lg">🚀 REWRITER SETTINGS (Improve Writing)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Rewriter Tone */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Tone:</label>
+                <select
+                  value={localConfig.rewriterTone}
+                  onChange={(e) => setLocalConfig({...localConfig, rewriterTone: e.target.value as AIConfigOptions['rewriterTone']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="as-is">AS-IS (Keep Original)</option>
+                  <option value="more-formal">MORE FORMAL</option>
+                  <option value="more-casual">MORE CASUAL</option>
+                </select>
+              </div>
+
+              {/* Rewriter Length */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Length:</label>
+                <select
+                  value={localConfig.rewriterLength}
+                  onChange={(e) => setLocalConfig({...localConfig, rewriterLength: e.target.value as AIConfigOptions['rewriterLength']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="as-is">AS-IS (Keep Length)</option>
+                  <option value="shorter">SHORTER</option>
+                  <option value="longer">LONGER</option>
+                </select>
+              </div>
+
+              {/* Rewriter Format */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Format:</label>
+                <select
+                  value={localConfig.rewriterFormat}
+                  onChange={(e) => setLocalConfig({...localConfig, rewriterFormat: e.target.value as AIConfigOptions['rewriterFormat']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="as-is">AS-IS (Keep Format)</option>
+                  <option value="markdown">MARKDOWN</option>
+                  <option value="plain-text">PLAIN TEXT</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
+              <p className="text-[#675D50] text-xs">
+                <strong>AS-IS:</strong> Keeps original style • 
+                <strong>MORE FORMAL:</strong> Professional tone • 
+                <strong>MORE CASUAL:</strong> Friendly tone • 
+                <strong>SHORTER:</strong> Concise version • 
+                <strong>LONGER:</strong> Detailed version
               </p>
             </div>
           </div>
