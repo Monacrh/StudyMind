@@ -12,6 +12,7 @@ import TranslatorService, { TranslatorOptions } from './services/TranslatorServi
 import ProofreaderService, { ProofreaderOptions } from './services/proofreaderService';
 import WriterService, { WriterOptions } from './services/writerService';
 import RewriterService, { RewriterOptions } from './services/rewriterService';
+import PromptService, { PromptOptions } from './services/promptService';
 import { AIConfigOptions } from './components/AIConfiguration';
 
 export default function StudyMindApp() {
@@ -25,6 +26,7 @@ export default function StudyMindApp() {
   const [proofreaderSupported, setProofreaderSupported] = useState(false);
   const [writerSupported, setWriterSupported] = useState(false);
   const [rewriterSupported, setRewriterSupported] = useState(false);
+  const [promptSupported, setPromptSupported] = useState(false);
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   
@@ -46,7 +48,10 @@ export default function StudyMindApp() {
     questionType: 'mixed',
     rewriterTone: 'as-is',
     rewriterFormat: 'as-is',
-    rewriterLength: 'as-is'
+    rewriterLength: 'as-is',
+    explainStyle: 'simple',
+    explainTemperature: 0.8,
+    explainTopK: 3
   });
 
   const summarizerService = SummarizerService.getInstance();
@@ -54,21 +59,23 @@ export default function StudyMindApp() {
   const proofreaderService = ProofreaderService.getInstance();
   const writerService = WriterService.getInstance();
   const rewriterService = RewriterService.getInstance();
+  const promptService = PromptService.getInstance();
 
   useEffect(() => {
-    // Check if AI APIs are supported
     const checkSupport = async () => {
       const summarizerSupport = summarizerService.isSupported();
       const translatorSupport = translatorService.isSupported();
       const proofreaderSupport = proofreaderService.isSupported();
       const writerSupport = writerService.isSupported();
       const rewriterSupport = rewriterService.isSupported();
+      const promptSupport = promptService.isSupported();
       
       setSummarizerSupported(summarizerSupport);
       setTranslatorSupported(translatorSupport);
       setProofreaderSupported(proofreaderSupport);
       setWriterSupported(writerSupport);
       setRewriterSupported(rewriterSupport);
+      setPromptSupported(promptSupport);
       
       if (summarizerSupport) {
         const availability = await summarizerService.checkAvailability();
@@ -118,6 +125,19 @@ export default function StudyMindApp() {
           console.log('Rewriter availability:', rewriterAvailability);
         } catch (error) {
           console.warn('Could not check rewriter availability:', error);
+        }
+      }
+      
+      if (promptSupport) {
+        console.log('Prompt API supported');
+        try {
+          const promptAvailability = await promptService.checkAvailability();
+          console.log('Prompt API availability:', promptAvailability);
+          
+          const capabilities = await promptService.getCapabilities();
+          console.log('Prompt API capabilities:', capabilities);
+        } catch (error) {
+          console.warn('Could not check prompt availability:', error);
         }
       }
     };
@@ -177,8 +197,6 @@ export default function StudyMindApp() {
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('Starting question generation...');
-
       let fullResult = '';
       
       const stream = writerService.generateQuestionsStreaming(
@@ -209,20 +227,15 @@ export default function StudyMindApp() {
       console.error('AI question generation error:', error);
       setIsDownloading(false);
       
-      let errorMessage = 'Unknown error occurred';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+      let errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
       if (errorMessage.includes('not supported')) {
-        errorMessage = 'Writer API not available in your Chrome version. Please enable chrome://flags/#writer-api-for-gemini-nano';
+        errorMessage = 'Writer API not available in your Chrome version.';
       } else if (errorMessage.includes('User activation')) {
         errorMessage = 'User interaction required for Writer API';
-      } else if (errorMessage.includes('cancelled')) {
-        errorMessage = 'Question generation was cancelled by user';
       }
       
-      return `❌ AI QUESTION GENERATION FAILED:\n\n${errorMessage}\n\n💡 NOTE: Writer API is in Origin Trial (experimental) and requires proper setup.\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('questions')}`;
+      return `❌ AI QUESTION GENERATION FAILED:\n\n${errorMessage}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('questions')}`;
     }
   };
 
@@ -257,10 +270,6 @@ export default function StudyMindApp() {
         const fromLang = translationResult.detectedLanguage || aiConfig.translateFrom;
         const toLang = aiConfig.translateTo;
         
-        if (translationResult.result === text && fromLang !== toLang) {
-          return `🌐 TRANSLATION RESULT:\n\nFrom: ${fromLang.toUpperCase()}\nTo: ${toLang.toUpperCase()}\n\n${translationResult.result}\n\n⚠️ Note: Translation model may not support this language pair yet.`;
-        }
-        
         return `🌐 AI-POWERED TRANSLATION:\n\nFrom: ${fromLang.toUpperCase()}\nTo: ${toLang.toUpperCase()}\n\n${translationResult.result}\n\n✨ Generated using Chrome's Built-in AI Translation`;
       } else {
         throw new Error(translationResult.error || 'Unknown translation error');
@@ -269,11 +278,7 @@ export default function StudyMindApp() {
       console.error('AI translation error:', error);
       setIsDownloading(false);
       
-      let errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      
-      if (errorMessage.includes('not available')) {
-        errorMessage = `Translation from ${aiConfig.translateFrom} to ${aiConfig.translateTo} is not supported yet`;
-      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
       return `❌ AI TRANSLATION FAILED:\n\n${errorMessage}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('translate')}`;
     }
@@ -366,12 +371,10 @@ export default function StudyMindApp() {
         tone: aiConfig.rewriterTone,
         format: aiConfig.rewriterFormat,
         length: aiConfig.rewriterLength,
-        sharedContext: 'Improve writing quality while maintaining the original meaning and key information.'
+        sharedContext: 'Improve writing quality while maintaining the original meaning.'
       };
 
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      console.log('Starting text improvement...');
 
       let fullResult = '';
       
@@ -401,41 +404,89 @@ export default function StudyMindApp() {
       console.error('AI text improvement error:', error);
       setIsDownloading(false);
       
-      let errorMessage = 'Unknown error occurred';
-      if (error instanceof Error) {
-        errorMessage = error.message;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      return `❌ AI TEXT IMPROVEMENT FAILED:\n\n${errorMessage}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('improve')}`;
+    }
+  };
+
+  const processExplain = async (text: string): Promise<string> => {
+    try {
+      setIsDownloading(true);
+      setModelDownloadProgress(0);
+      
+      if (!text || text.trim().length < 3) {
+        throw new Error('Text too short for explanation (minimum 3 characters)');
       }
       
-      if (errorMessage.includes('not supported')) {
-        errorMessage = 'Rewriter API not available in your Chrome version. Please enable chrome://flags/#rewriter-api-for-gemini-nano';
-      } else if (errorMessage.includes('User activation')) {
-        errorMessage = 'User interaction required for Rewriter API';
-      } else if (errorMessage.includes('cancelled')) {
-        errorMessage = 'Text improvement was cancelled by user';
+      const promptOptions: PromptOptions = {
+        temperature: aiConfig.explainTemperature,
+        topK: aiConfig.explainTopK
+      };
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      let fullResult = '';
+      
+      const stream = promptService.explainStreaming(
+        text,
+        aiConfig.explainStyle,
+        'Provide a clear and helpful explanation.',
+        promptOptions,
+        (progress) => {
+          setModelDownloadProgress(progress);
+          if (progress >= 100) {
+            setIsDownloading(false);
+          }
+        }
+      );
+
+      for await (const chunk of stream) {
+        fullResult += chunk;
       }
       
-      return `❌ AI TEXT IMPROVEMENT FAILED:\n\n${errorMessage}\n\n💡 NOTE: Rewriter API is in Origin Trial (experimental) and requires proper setup.\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('improve')}`;
+      if (fullResult) {
+        const styleEmoji: Record<string, string> = {
+          'simple': '💬',
+          'eli5': '👶',
+          'analogy': '🔄',
+          'step-by-step': '📋',
+          'examples': '📚'
+        };
+        
+        const styleName: Record<string, string> = {
+          'simple': 'SIMPLE EXPLANATION',
+          'eli5': 'ELI5 EXPLANATION',
+          'analogy': 'ANALOGY EXPLANATION',
+          'step-by-step': 'STEP-BY-STEP EXPLANATION',
+          'examples': 'EXPLANATION WITH EXAMPLES'
+        };
+        
+        return `${styleEmoji[aiConfig.explainStyle]} AI ${styleName[aiConfig.explainStyle]}:\n\n${fullResult}\n\n✨ Generated using Chrome's Built-in Prompt API (Gemini Nano)`;
+      } else {
+        throw new Error('No explanation generated');
+      }
+      
+    } catch (error) {
+      console.error('AI explanation error:', error);
+      setIsDownloading(false);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      return `❌ AI EXPLANATION FAILED:\n\n${errorMessage}\n\n💡 FALLBACK: Using mock response instead.\n\n${processWithMockAI('explain')}`;
     }
   };
 
   const processWithMockAI = (action: string): string => {
-    switch (action) {
-      case 'summarize':
-        return '📝 SUMMARY (MOCK):\n\nThis is a mock summary. The main points have been condensed into key takeaways.\n\n• Key Point 1\n• Key Point 2\n• Key Point 3';
-      case 'questions':
-        return '❓ QUESTIONS GENERATED (MOCK):\n\n1. What are the key concepts mentioned?\n2. How does this relate to the main topic?\n3. What examples support the main points?\n4. What practical applications can be derived?\n5. What conclusions can be drawn?';
-      case 'translate':
-        const targetLang = aiConfig.translateTo === 'id' ? 'Indonesian' : 'English';
-        return `🌐 TRANSLATION RESULT (MOCK):\n\n[${targetLang}] Mock translation result.`;
-      case 'proofread':
-        return '✏️ PROOFREAD COMPLETE (MOCK):\n\n✅ Grammar: No errors\n✅ Spelling: Correct\n✅ Punctuation: Proper\n\nScore: 95/100';
-      case 'improve':
-        return '🚀 WRITING IMPROVED (MOCK):\n\nYour content has been enhanced for clarity and engagement.';
-      case 'explain':
-        return '🤔 SIMPLE EXPLANATION (MOCK):\n\nHere\'s a simplified breakdown of the concept.';
-      default:
-        return 'Unknown action requested.';
-    }
+    const mocks: Record<string, string> = {
+      summarize: '📝 SUMMARY (MOCK):\n\nThis is a mock summary. The main points have been condensed into key takeaways.\n\n• Key Point 1\n• Key Point 2\n• Key Point 3',
+      questions: '❓ QUESTIONS GENERATED (MOCK):\n\n1. What are the key concepts mentioned?\n2. How does this relate to the main topic?\n3. What examples support the main points?',
+      translate: `🌐 TRANSLATION RESULT (MOCK):\n\n[${aiConfig.translateTo === 'id' ? 'Indonesian' : 'English'}] Mock translation result.`,
+      proofread: '✏️ PROOFREAD COMPLETE (MOCK):\n\n✅ Grammar: No errors\n✅ Spelling: Correct\n✅ Punctuation: Proper',
+      improve: '🚀 WRITING IMPROVED (MOCK):\n\nYour content has been enhanced for clarity and engagement.',
+      explain: '🤔 SIMPLE EXPLANATION (MOCK):\n\nHere\'s a simplified breakdown of the concept.'
+    };
+    return mocks[action] || 'Unknown action requested.';
   };
 
   const handleProcess = async () => {
@@ -457,29 +508,29 @@ export default function StudyMindApp() {
           finalResult += `${i + 1}. `;
           
           try {
-            if (i > 0) {
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
+            if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
             
-            if (action === 'summarize' && summarizerSupported && inputText.trim()) {
-              const aiResult = await processSummarization(inputText);
-              finalResult += `SUMMARY:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
-            }
-            else if (action === 'questions' && writerSupported && inputText.trim()) {
-              const aiResult = await processQuestionGeneration(inputText);
-              finalResult += `QUESTIONS:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
-            }
-            else if (action === 'translate' && translatorSupported && inputText.trim()) {
-              const aiResult = await processTranslation(inputText);
-              finalResult += `TRANSLATION:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
-            }
-            else if (action === 'proofread' && proofreaderSupported && inputText.trim()) {
-              const aiResult = await processProofreading(inputText);
-              finalResult += `PROOFREAD:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
-            }
-            else if (action === 'improve' && rewriterSupported && inputText.trim()) {
-              const aiResult = await processImprove(inputText);
-              finalResult += `IMPROVE:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
+            const processors: Record<string, () => Promise<string>> = {
+              summarize: () => processSummarization(inputText),
+              questions: () => processQuestionGeneration(inputText),
+              translate: () => processTranslation(inputText),
+              proofread: () => processProofreading(inputText),
+              improve: () => processImprove(inputText),
+              explain: () => processExplain(inputText)
+            };
+            
+            const supported: Record<string, boolean> = {
+              summarize: summarizerSupported,
+              questions: writerSupported,
+              translate: translatorSupported,
+              proofread: proofreaderSupported,
+              improve: rewriterSupported,
+              explain: promptSupported
+            };
+            
+            if (supported[action] && inputText.trim()) {
+              const aiResult = await processors[action]();
+              finalResult += `${action.toUpperCase()}:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             } else {
               const mockResult = processWithMockAI(action);
               finalResult += `${action.toUpperCase()}: ${mockResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
@@ -494,20 +545,26 @@ export default function StudyMindApp() {
       } else {
         const action = selectedActions[0];
         
-        if (action === 'summarize' && summarizerSupported && inputText.trim()) {
-          finalResult = await processSummarization(inputText);
-        }
-        else if (action === 'questions' && writerSupported && inputText.trim()) {
-          finalResult = await processQuestionGeneration(inputText);
-        }
-        else if (action === 'translate' && translatorSupported && inputText.trim()) {
-          finalResult = await processTranslation(inputText);
-        }
-        else if (action === 'proofread' && proofreaderSupported && inputText.trim()) {
-          finalResult = await processProofreading(inputText);
-        }
-        else if (action === 'improve' && rewriterSupported && inputText.trim()) {
-          finalResult = await processImprove(inputText);
+        const processors: Record<string, () => Promise<string>> = {
+          summarize: () => processSummarization(inputText),
+          questions: () => processQuestionGeneration(inputText),
+          translate: () => processTranslation(inputText),
+          proofread: () => processProofreading(inputText),
+          improve: () => processImprove(inputText),
+          explain: () => processExplain(inputText)
+        };
+        
+        const supported: Record<string, boolean> = {
+          summarize: summarizerSupported,
+          questions: writerSupported,
+          translate: translatorSupported,
+          proofread: proofreaderSupported,
+          improve: rewriterSupported,
+          explain: promptSupported
+        };
+        
+        if (supported[action] && inputText.trim()) {
+          finalResult = await processors[action]();
         } else {
           finalResult = processWithMockAI(action);
         }
@@ -540,20 +597,22 @@ export default function StudyMindApp() {
         onConfigChange={setAiConfig}
       />
       
-      {(summarizerSupported || translatorSupported || proofreaderSupported || writerSupported || rewriterSupported) && (
+      {(summarizerSupported || translatorSupported || proofreaderSupported || writerSupported || rewriterSupported || promptSupported) && (
         <div className="container mx-auto px-6 pt-4">
           <div className="bg-green-200 border-2 border-[#675D50] p-2 shadow-[2px_2px_0px_0px_#675D50]">
             <p className="text-[#675D50] text-sm font-bold text-center">
               🤖 CHROME AI ENABLED - 
               {summarizerSupported && ' Summarization'}
-              {summarizerSupported && (translatorSupported || proofreaderSupported || writerSupported || rewriterSupported) && ' +'}
+              {summarizerSupported && (translatorSupported || proofreaderSupported || writerSupported || rewriterSupported || promptSupported) && ' +'}
               {translatorSupported && ' Translation'}
-              {translatorSupported && (proofreaderSupported || writerSupported || rewriterSupported) && ' +'}
+              {translatorSupported && (proofreaderSupported || writerSupported || rewriterSupported || promptSupported) && ' +'}
               {proofreaderSupported && ' Proofreading'}
-              {proofreaderSupported && (writerSupported || rewriterSupported) && ' +'}
+              {proofreaderSupported && (writerSupported || rewriterSupported || promptSupported) && ' +'}
               {writerSupported && ' Question Generation'}
-              {writerSupported && rewriterSupported && ' +'}
-              {rewriterSupported && ' Text Improvement'} available!
+              {writerSupported && (rewriterSupported || promptSupported) && ' +'}
+              {rewriterSupported && ' Text Improvement'}
+              {rewriterSupported && promptSupported && ' +'}
+              {promptSupported && ' AI Explanations'} available!
             </p>
           </div>
         </div>
@@ -609,7 +668,7 @@ export default function StudyMindApp() {
         style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}
       >
         STUDYMIND AI - YOUR VINTAGE STUDY COMPANION
-        {(summarizerSupported || translatorSupported || proofreaderSupported || writerSupported || rewriterSupported) && (
+        {(summarizerSupported || translatorSupported || proofreaderSupported || writerSupported || rewriterSupported || promptSupported) && (
           <div className="text-xs mt-1 opacity-75">
             🤖 Powered by Chrome&apos;s Built-in AI (Gemini Nano)
           </div>

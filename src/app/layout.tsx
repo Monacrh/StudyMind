@@ -29,6 +29,7 @@ export const metadata: Metadata = {
       'Av7dzM9937eJVxOC7yz8gyfzrA7IlFRbJmuUdNv0xqFEke7fzgDyicClC8chz+zJwutQ2aXACfL/sLt8wPnnYgkAAABQeyJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJmZWF0dXJlIjoiQUlSZXdyaXRlckFQSSIsImV4cGlyeSI6MTc2OTQ3MjAwMH0=',
 
       // Token untuk Prompt API
+      'Au2XGBVCng8laatAt3TPCfUo5NOw0MVS2qlnKQf5Gab2KxToJ1fIktTS7xh9A222xMnb9AvUJA4hQvNzZX2uwQwAAABdeyJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDB9'
     ]
   }
 };

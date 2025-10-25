@@ -25,10 +25,15 @@ export interface AIConfigOptions {
   numberOfQuestions: number;
   questionType: 'multiple-choice' | 'essay' | 'short-answer' | 'true-false' | 'mixed';
   
-  // Rewriter options (NEW)
+  // Rewriter options
   rewriterTone: 'as-is' | 'more-formal' | 'more-casual';
   rewriterFormat: 'as-is' | 'markdown' | 'plain-text';
   rewriterLength: 'as-is' | 'shorter' | 'longer';
+  
+  // Prompt API options (Explain)
+  explainStyle: 'simple' | 'eli5' | 'analogy' | 'step-by-step' | 'examples';
+  explainTemperature: number;
+  explainTopK: number;
 }
 
 interface AIConfigProps {
@@ -82,7 +87,10 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
       questionType: 'mixed',
       rewriterTone: 'as-is',
       rewriterFormat: 'as-is',
-      rewriterLength: 'as-is'
+      rewriterLength: 'as-is',
+      explainStyle: 'simple',
+      explainTemperature: 0.8,
+      explainTopK: 3
     };
     setLocalConfig(defaultConfig);
   };
@@ -417,6 +425,148 @@ export default function AIConfig({ isVisible, onClose, config, onConfigChange }:
                 <strong>MORE CASUAL:</strong> Friendly tone • 
                 <strong>SHORTER:</strong> Concise version • 
                 <strong>LONGER:</strong> Detailed version
+              </p>
+            </div>
+          </div>
+
+          {/* Prompt API Configuration (Explain) - NEW */}
+          <div className="bg-[#ABC4AA] border-2 border-[#675D50] p-4 shadow-[3px_3px_0px_0px_#675D50] mb-4">
+            <h3 className="font-bold text-[#675D50] mb-3 text-lg">🤔 PROMPT API SETTINGS (Explain)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Explain Style */}
+              <div className="md:col-span-3">
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Explanation Style:</label>
+                <select
+                  value={localConfig.explainStyle}
+                  onChange={(e) => setLocalConfig({...localConfig, explainStyle: e.target.value as AIConfigOptions['explainStyle']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="simple">SIMPLE LANGUAGE</option>
+                  <option value="eli5">ELI5 (Explain Like I&apos;m 5)</option>
+                  <option value="analogy">WITH EVERYDAY ANALOGIES</option>
+                  <option value="step-by-step">STEP-BY-STEP BREAKDOWN</option>
+                  <option value="examples">WITH REAL-WORLD EXAMPLES</option>
+                </select>
+              </div>
+
+              {/* Temperature */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">
+                  Temperature: {localConfig.explainTemperature}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={localConfig.explainTemperature}
+                  onChange={(e) => setLocalConfig({...localConfig, explainTemperature: parseFloat(e.target.value)})}
+                  className="w-full"
+                />
+                <p className="text-[#675D50] text-xs mt-1">
+                  Lower = Focused, Higher = Creative
+                </p>
+              </div>
+
+              {/* Top K */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">
+                  Top K: {localConfig.explainTopK}
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="8"
+                  step="1"
+                  value={localConfig.explainTopK}
+                  onChange={(e) => setLocalConfig({...localConfig, explainTopK: parseInt(e.target.value)})}
+                  className="w-full"
+                />
+                <p className="text-[#675D50] text-xs mt-1">
+                  Lower = Predictable, Higher = Diverse
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
+              <p className="text-[#675D50] text-xs">
+                <strong>SIMPLE:</strong> Easy everyday language • 
+                <strong>ELI5:</strong> For kids/beginners • 
+                <strong>ANALOGY:</strong> Like cooking, sports, shopping • 
+                <strong>STEP-BY-STEP:</strong> Numbered breakdown • 
+                <strong>EXAMPLES:</strong> Real scenarios
+              </p>
+            </div>
+          </div>
+
+          {/* Prompt API Configuration (Explain) - NEW */}
+          <div className="bg-[#ABC4AA] border-2 border-[#675D50] p-4 shadow-[3px_3px_0px_0px_#675D50] mb-4">
+            <h3 className="font-bold text-[#675D50] mb-3 text-lg">🤔 PROMPT API SETTINGS (Explain)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Explain Style */}
+              <div className="md:col-span-3">
+                <label className="block text-[#675D50] font-bold text-sm mb-2">Explanation Style:</label>
+                <select
+                  value={localConfig.explainStyle}
+                  onChange={(e) => setLocalConfig({...localConfig, explainStyle: e.target.value as AIConfigOptions['explainStyle']})}
+                  className="w-full p-2 bg-[#F3DEBA] text-[#675D50] border-2 border-[#675D50] font-bold text-sm"
+                >
+                  <option value="simple">SIMPLE LANGUAGE</option>
+                  <option value="eli5">ELI5 (Explain Like I&apos;m 5)</option>
+                  <option value="analogy">WITH EVERYDAY ANALOGIES</option>
+                  <option value="step-by-step">STEP-BY-STEP BREAKDOWN</option>
+                  <option value="examples">WITH REAL-WORLD EXAMPLES</option>
+                </select>
+              </div>
+
+              {/* Temperature */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">
+                  Temperature: {localConfig.explainTemperature.toFixed(1)}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={localConfig.explainTemperature}
+                  onChange={(e) => setLocalConfig({...localConfig, explainTemperature: parseFloat(e.target.value)})}
+                  className="w-full"
+                />
+                <p className="text-[#675D50] text-xs mt-1">
+                  Lower = Focused, Higher = Creative
+                </p>
+              </div>
+
+              {/* Top K */}
+              <div>
+                <label className="block text-[#675D50] font-bold text-sm mb-2">
+                  Top K: {localConfig.explainTopK}
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="8"
+                  step="1"
+                  value={localConfig.explainTopK}
+                  onChange={(e) => setLocalConfig({...localConfig, explainTopK: parseInt(e.target.value)})}
+                  className="w-full"
+                />
+                <p className="text-[#675D50] text-xs mt-1">
+                  Lower = Predictable, Higher = Diverse
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 p-2 bg-[#F3DEBA] border border-dashed border-[#675D50]">
+              <p className="text-[#675D50] text-xs">
+                <strong>SIMPLE:</strong> Easy everyday language • 
+                <strong>ELI5:</strong> For kids/beginners • 
+                <strong>ANALOGY:</strong> Like cooking, sports, shopping • 
+                <strong>STEP-BY-STEP:</strong> Numbered breakdown • 
+                <strong>EXAMPLES:</strong> Real scenarios
               </p>
             </div>
           </div>
