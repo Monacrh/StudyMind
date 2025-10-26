@@ -13,6 +13,7 @@ import ProofreaderService, { ProofreaderOptions } from './services/proofreaderSe
 import WriterService, { WriterOptions } from './services/writerService';
 import RewriterService, { RewriterOptions } from './services/rewriterService';
 import PromptService, { PromptOptions } from './services/promptService';
+import PDFService from './services/pdfService';
 import { AIConfigOptions } from './components/AIConfiguration';
 
 export default function StudyMindApp() {
@@ -60,6 +61,7 @@ export default function StudyMindApp() {
   const writerService = WriterService.getInstance();
   const rewriterService = RewriterService.getInstance();
   const promptService = PromptService.getInstance();
+  const pdfService = PDFService.getInstance();
 
   useEffect(() => {
     const checkSupport = async () => {
@@ -144,6 +146,56 @@ export default function StudyMindApp() {
 
     checkSupport();
   }, []);
+
+  // Process uploaded files to extract text
+  const processFiles = async (): Promise<string> => {
+    if (selectedFiles.length === 0) {
+      return '';
+    }
+
+    let extractedText = '';
+    
+    for (const file of selectedFiles) {
+      try {
+        console.log(`Processing file: ${file.name}`);
+        
+        // Handle PDF files
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          setIsDownloading(true);
+          
+          const result = await pdfService.extractText(file, (progress) => {
+            setModelDownloadProgress(progress);
+          });
+          
+          if (result.success && result.text) {
+            extractedText += `\n\n--- Content from ${file.name} (${result.numPages} pages) ---\n${result.text}\n`;
+            
+            if (result.isScanned) {
+              console.warn(`${file.name} might be scanned, text extraction may be incomplete`);
+            }
+          } else {
+            extractedText += `\n\n--- Error processing ${file.name} ---\n${result.error}\n`;
+          }
+          
+          setIsDownloading(false);
+        }
+        // Handle images (placeholder for future OCR implementation)
+        else if (file.type.startsWith('image/')) {
+          extractedText += `\n\n--- ${file.name} ---\n[Image file detected - OCR not yet implemented]\n`;
+        }
+        // Handle audio (placeholder for future transcription)
+        else if (file.type.startsWith('audio/')) {
+          extractedText += `\n\n--- ${file.name} ---\n[Audio file detected - Transcription not yet implemented]\n`;
+        }
+        
+      } catch (error) {
+        console.error(`Error processing ${file.name}:`, error);
+        extractedText += `\n\n--- Error processing ${file.name} ---\n${error instanceof Error ? error.message : 'Unknown error'}\n`;
+      }
+    }
+    
+    return extractedText;
+  };
 
   const processSummarization = async (text: string): Promise<string> => {
     try {
@@ -498,8 +550,31 @@ export default function StudyMindApp() {
     setIsDownloading(false);
     
     try {
+      // Process files first to extract text
+      const fileText = await processFiles();
+      
+      // Combine input text with extracted file text
+      const combinedText = `${inputText}\n${fileText}`.trim();
+      
+      console.log('Combined text length:', combinedText.length);
+      console.log('Combined text preview:', combinedText.substring(0, 200));
+      
+      if (!combinedText) {
+        setResult('❌ No content to process. Please provide text or upload files.');
+        setIsProcessing(false);
+        return;
+      }
+      
       let finalResult = '';
       
+      console.log('=== DEBUG INFO ===');
+      console.log('Selected actions:', selectedActions);
+      console.log('Actions length:', selectedActions.length);
+      console.log('Combined text length:', combinedText.length);
+      console.log('Translator supported:', translatorSupported);
+      console.log('==================');
+      
+      // COMBINED OPERATIONS (Multiple actions)
       if (selectedActions.length > 1) {
         finalResult = `🔄 COMBINED OPERATIONS COMPLETED:\n\n`;
         
@@ -511,12 +586,12 @@ export default function StudyMindApp() {
             if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
             
             const processors: Record<string, () => Promise<string>> = {
-              summarize: () => processSummarization(inputText),
-              questions: () => processQuestionGeneration(inputText),
-              translate: () => processTranslation(inputText),
-              proofread: () => processProofreading(inputText),
-              improve: () => processImprove(inputText),
-              explain: () => processExplain(inputText)
+              summarize: () => processSummarization(combinedText),
+              questions: () => processQuestionGeneration(combinedText),
+              translate: () => processTranslation(combinedText),
+              proofread: () => processProofreading(combinedText),
+              improve: () => processImprove(combinedText),
+              explain: () => processExplain(combinedText)
             };
             
             const supported: Record<string, boolean> = {
@@ -528,7 +603,11 @@ export default function StudyMindApp() {
               explain: promptSupported
             };
             
-            if (supported[action] && inputText.trim()) {
+            console.log(`Processing action: ${action}`);
+            console.log(`Action supported: ${supported[action]}`);
+            console.log(`Has combinedText: ${!!combinedText}`);
+            
+            if (supported[action] && combinedText) {
               const aiResult = await processors[action]();
               finalResult += `${action.toUpperCase()}:\n${aiResult.split('\n\n').slice(1).join('\n\n')}\n\n`;
             } else {
@@ -542,16 +621,24 @@ export default function StudyMindApp() {
           }
         }
         finalResult += `✨ All ${selectedActions.length} operations completed!`;
-      } else {
+      } 
+      // SINGLE OPERATION
+      else {
         const action = selectedActions[0];
         
+        console.log('=== SINGLE ACTION MODE ===');
+        console.log('Action:', action);
+        console.log('Has combined text:', !!combinedText);
+        console.log('Combined text length:', combinedText.length);
+        console.log('========================');
+        
         const processors: Record<string, () => Promise<string>> = {
-          summarize: () => processSummarization(inputText),
-          questions: () => processQuestionGeneration(inputText),
-          translate: () => processTranslation(inputText),
-          proofread: () => processProofreading(inputText),
-          improve: () => processImprove(inputText),
-          explain: () => processExplain(inputText)
+          summarize: () => processSummarization(combinedText),
+          questions: () => processQuestionGeneration(combinedText),
+          translate: () => processTranslation(combinedText),
+          proofread: () => processProofreading(combinedText),
+          improve: () => processImprove(combinedText),
+          explain: () => processExplain(combinedText)
         };
         
         const supported: Record<string, boolean> = {
@@ -563,9 +650,14 @@ export default function StudyMindApp() {
           explain: promptSupported
         };
         
-        if (supported[action] && inputText.trim()) {
+        console.log('Is action supported?', supported[action]);
+        
+        if (supported[action] && combinedText) {
+          console.log('✅ Calling REAL AI processor for:', action);
           finalResult = await processors[action]();
+          console.log('✅ Processor completed successfully');
         } else {
+          console.log('❌ Using mock - supported:', supported[action], ', has text:', !!combinedText);
           finalResult = processWithMockAI(action);
         }
       }
