@@ -20,10 +20,20 @@ export default function InputSection({
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     setSelectedFiles(prev => [...prev, ...files]);
+    
+    // Reset input value untuk memungkinkan upload file yang sama lagi
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    
+    // Reset input value saat remove file
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
