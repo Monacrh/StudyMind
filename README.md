@@ -66,3 +66,7 @@ bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+### 🔗 Live Demo: study-mind-nine.vercel.app
+### 🎥 Demo Video: Watch on YouTube
+### 🏆 Built for Chrome Built-in AI Challenge 2025
