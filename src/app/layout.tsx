@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "StudyMind",
-  description: "Website to improve your study",
+  description: "Website to improve your study, this project is to complete Google Chrome Built-In AI Challenge 2025",
   other: {
     // Gunakan array untuk menampung semua token Origin Trial
     'origin-trial': [
